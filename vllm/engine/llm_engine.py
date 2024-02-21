@@ -88,6 +88,14 @@ class LLMEngine:
             f"seed={model_config.seed})")
         # TODO(woosuk): Print more configs in debug mode.
 
+        self.tokenizer = get_tokenizer(
+            model_config.tokenizer,
+            tokenizer_mode=model_config.tokenizer_mode,
+            trust_remote_code=model_config.trust_remote_code,
+            tokenizer_revision=model_config.tokenizer_revision,
+            revision=model_config.revision)
+        model_config.hf_config.sampler_vocab_size = min(
+            len(self.tokenizer), model_config.hf_config.vocab_size)
         self.model_config = model_config
         self.cache_config = cache_config
         self.parallel_config = parallel_config
@@ -95,12 +103,6 @@ class LLMEngine:
         self.log_stats = log_stats
         self._verify_args()
 
-        self.tokenizer = get_tokenizer(
-            model_config.tokenizer,
-            tokenizer_mode=model_config.tokenizer_mode,
-            trust_remote_code=model_config.trust_remote_code,
-            tokenizer_revision=model_config.tokenizer_revision,
-            revision=model_config.revision)
         self.seq_counter = Counter()
 
         # Create the parallel GPU workers.
@@ -217,7 +219,7 @@ class LLMEngine:
         # Since we use a shared centralized controller, we take the minimum
         # number of blocks across all workers to make sure all the memory
         # operators can be applied to all workers.
-        num_gpu_blocks = min(10500, min(b[0] for b in num_blocks))
+        num_gpu_blocks = min(b[0] for b in num_blocks)
         num_cpu_blocks = min(b[1] for b in num_blocks)
         # FIXME(woosuk): Change to debug log.
         logger.info(f"# GPU blocks: {num_gpu_blocks}, "
