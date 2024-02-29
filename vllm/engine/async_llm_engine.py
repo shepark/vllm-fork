@@ -335,6 +335,7 @@ class AsyncLLMEngine:
         if self.engine_use_ray:
             request_outputs = await self.engine.step.remote()
         else:
+            await asyncio.sleep(0)
             request_outputs = await self.engine.step_async()
 
         # Put the outputs into the corresponding streams.
