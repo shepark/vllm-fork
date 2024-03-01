@@ -46,10 +46,10 @@ def memory_efficient_attention_forward(
 ) -> torch.Tensor:
     dim = query.dim()
     if FusedSDPA:
-        seq_len_q = attn_bias.q_seqinfo.max_seqlen
-        _, bs, heads, head_dim = query.shape
-        bs //= seq_len_q
-        seq_len_kv = attn_bias.k_seqinfo.max_seqlen
+        _, _, heads, head_dim = query.shape
+        bs = len(cu_seq_lens)
+        seq_len_q = query.shape[1] // bs
+        seq_len_kv = key.shape[1] // bs
         query = query.reshape(bs, seq_len_q, heads, head_dim).permute(0, 2, 1, 3)
         key = key.reshape(bs, seq_len_kv, heads, head_dim).permute(0, 2, 1, 3)
         value = value.reshape(bs, seq_len_kv, heads, head_dim).permute(0, 2, 1, 3)
