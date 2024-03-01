@@ -44,7 +44,6 @@ def memory_efficient_attention_forward(
     p: float = 0.0,
     scale: Optional[float] = None,
 ) -> torch.Tensor:
-    attn_mask = attn_bias.materialize(device=query.device)
     dim = query.dim()
     if FusedSDPA:
         seq_len_q = attn_bias.q_seqinfo.max_seqlen
@@ -73,6 +72,8 @@ def memory_efficient_attention_forward(
             mask_start_idx = i * seq_len
             mask_end_idx = (i + 1) * seq_len
 
+            # Create attention mask.
+            attn_mask = attn_bias.materialize(device=query.device)
             output = block_masked_attention(
                 query[start_idx:end_idx],
                 key[start_idx:end_idx],
