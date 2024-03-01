@@ -11,6 +11,12 @@ import torch.nn.functional as F
 from typing import List, Optional, Tuple, Union
 from .attn_bias import AttentionBias
 
+try:
+    from habana_frameworks.torch.hpex.kernels import FusedSDPA
+except ImportError:
+    print("Not using HPU fused scaled dot-product attention kernel.")
+    FusedSDPA = None
+
 
 def block_masked_attention(
     query: torch.Tensor,
@@ -38,30 +44,45 @@ def memory_efficient_attention_forward(
     p: float = 0.0,
     scale: Optional[float] = None,
 ) -> torch.Tensor:
+    attn_mask = attn_bias.materialize(device=query.device)
     dim = query.dim()
-    if dim == 4:
-        query, key, value = query.squeeze(0), key.squeeze(0), value.squeeze(0)
-    num_seqs = len(cu_seq_lens) - 1
-    outputs = []
-    for i in range(num_seqs):
-        start_idx = cu_seq_lens[i]
-        end_idx = cu_seq_lens[i + 1]
-        seq_len = end_idx - start_idx
-        mask_start_idx = i * seq_len
-        mask_end_idx = (i + 1) * seq_len
+    if FusedSDPA:
+        seq_len_q = attn_bias.q_seqinfo.max_seqlen
+        _, bs, heads, head_dim = query.shape
+        bs //= seq_len_q
+        seq_len_kv = attn_bias.k_seqinfo.max_seqlen
+        query = query.reshape(bs, seq_len_q, heads, head_dim).permute(0, 2, 1, 3)
+        key = key.reshape(bs, seq_len_kv, heads, head_dim).permute(0, 2, 1, 3)
+        value = value.reshape(bs, seq_len_kv, heads, head_dim).permute(0, 2, 1, 3)
+        attn_mask = torch.ones((bs, heads, seq_len_q, seq_len_kv), device=query.device, dtype=torch.bool).tril()
+        import habana_frameworks.torch.hpu as ht
+        with ht.sdp_kernel(enable_recompute=False):  # (flash_attention_recompute and q_len == 1)):
+            out = FusedSDPA.apply(
+                query, key, value, attn_mask, 0.0, False, None
+            )
+        htorch.core.mark_step()
+    else:
+        if dim == 4:
+            query, key, value = query.squeeze(0), key.squeeze(0), value.squeeze(0)
+        num_seqs = len(cu_seq_lens) - 1
+        outputs = []
+        for i in range(num_seqs):
+            start_idx = cu_seq_lens[i]
+            end_idx = cu_seq_lens[i + 1]
+            seq_len = end_idx - start_idx
+            mask_start_idx = i * seq_len
+            mask_end_idx = (i + 1) * seq_len
 
-        # Create attention mask.
-        attn_mask = attn_bias.materialize(device=query.device)
-        output = block_masked_attention(
-            query[start_idx:end_idx],
-            key[start_idx:end_idx],
-            value[start_idx:end_idx],
-            scale,
-            attn_mask=attn_mask[mask_start_idx:mask_end_idx,
-                                mask_start_idx:mask_end_idx],
-        )
-        outputs.append(output)
-    out = torch.cat(outputs, dim=0)
-    if dim == 4:
-        out = out.unsqueeze(0)
+            output = block_masked_attention(
+                query[start_idx:end_idx],
+                key[start_idx:end_idx],
+                value[start_idx:end_idx],
+                scale,
+                attn_mask=attn_mask[mask_start_idx:mask_end_idx,
+                                    mask_start_idx:mask_end_idx],
+            )
+            outputs.append(output)
+        out = torch.cat(outputs, dim=0)
+        if dim == 4:
+            out = out.unsqueeze(0)
     return out
