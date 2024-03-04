@@ -173,9 +173,6 @@ class PagedAttention(nn.Module):
                     scale=self.scale,
                 )
                 if FusedSDPA:
-                    if out.shape[0] * out.shape[1] * out.shape[2] * out.shape[3] != batch_size * seq_len * hidden_size:
-                        import pdb
-                        pdb.set_trace()
                     output = out.permute(0, 2, 1, 3).reshape(batch_size, seq_len, hidden_size)
                 else:
                     output = torch.zeros_like(query)
