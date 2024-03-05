@@ -9,7 +9,7 @@ import habana_frameworks.torch as htorch
 import torch
 import torch.nn.functional as F
 from typing import List, Optional, Tuple, Union
-from .attn_bias import AttentionBias
+from .attn_bias import AttentionBias, BlockDiagonalCausalMask
 
 try:
     from habana_frameworks.torch.hpex.kernels import FusedSDPA
@@ -44,10 +44,11 @@ def memory_efficient_attention_forward(
     p: float = 0.0,
     scale: Optional[float] = None,
 ) -> torch.Tensor:
+    assert attn_bias is not None, "Attention mask is required for prompt processing"
     dim = query.dim()
-    if FusedSDPA:
+    if FusedSDPA and isinstance(attn_bias, BlockDiagonalCausalMask):
         _, _, heads, head_dim = query.shape
-        bs = len(cu_seq_lens)
+        bs = len(cu_seq_lens) - 1
         seq_len_q = query.shape[1] // bs
         seq_len_kv = key.shape[1] // bs
         query = query.reshape(bs, seq_len_q, heads, head_dim).permute(0, 2, 1, 3)
@@ -60,6 +61,7 @@ def memory_efficient_attention_forward(
                 query, key, value, attn_mask, 0.0, False, None
             )
         htorch.core.mark_step()
+        out = out.permute(0, 2, 1, 3).reshape(bs * seq_len_q, heads, head_dim)
     else:
         if dim == 4:
             query, key, value = query.squeeze(0), key.squeeze(0), value.squeeze(0)
@@ -84,6 +86,6 @@ def memory_efficient_attention_forward(
             )
             outputs.append(output)
         out = torch.cat(outputs, dim=0)
-        if dim == 4:
-            out = out.unsqueeze(0)
+    if dim == 4:
+        out = out.unsqueeze(0)
     return out

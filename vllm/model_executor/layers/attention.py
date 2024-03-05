@@ -152,17 +152,10 @@ class PagedAttention(nn.Module):
                 value = value.unflatten(0, (batch_size, seq_len))
 
             if is_hpu():
-                try:
-                    from habana_frameworks.torch.hpex.kernels import FusedSDPA
-                except ImportError:
-                    FusedSDPA = None
-                if FusedSDPA:
-                    cu_seq_lens = input_metadata.prompt_lens
-                else:
-                    cu_seq_lens = [0]
-                    for i in range(len(input_metadata.prompt_lens)):
-                        cu_seq_lens.append(cu_seq_lens[-1] + input_metadata.prompt_lens[i])
-                    input_metadata.cu_seq_lens = cu_seq_lens
+                cu_seq_lens = [0]
+                for i in range(len(input_metadata.prompt_lens)):
+                    cu_seq_lens.append(cu_seq_lens[-1] + input_metadata.prompt_lens[i])
+                input_metadata.cu_seq_lens = cu_seq_lens
                 out = xops.memory_efficient_attention_forward(
                     query,
                     key,
@@ -172,12 +165,9 @@ class PagedAttention(nn.Module):
                     p=0.0,
                     scale=self.scale,
                 )
-                if FusedSDPA:
-                    output = out.permute(0, 2, 1, 3).reshape(batch_size, seq_len, hidden_size)
-                else:
-                    output = torch.zeros_like(query)
-                    output[:, :out.shape[1], :, :] = out
-                    output = output.view_as(query)
+                output = torch.zeros_like(query)
+                output[:, :out.shape[1], :, :] = out
+                output = output.view_as(query)
             else:
                 out = xops.memory_efficient_attention_forward(
                     query,
