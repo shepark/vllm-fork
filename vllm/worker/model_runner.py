@@ -20,10 +20,9 @@ KVCache = Tuple[torch.Tensor, torch.Tensor]
 _PAD_SLOT_ID = -1
 # Capture graphs for batch size 1, 2, 4, 8, 16, 24, 32, 40, ..., 256.
 # NOTE: _get_graph_batch_size needs to be updated if this list is changed.
-_BATCH_SIZES_TO_CAPTURE = [1, 2, 4, 8] #+ [8 * i for i in range(1, 33)]
-_BLOCK_COUNTS_TO_CAPTURE = [1, 2, 4] + [8 * i for i in range(1, 33)]
-
-
+_BATCH_SIZES_TO_CAPTURE = [1, 2, 4]  + [8 * i for i in range(1, 33)]
+_BLOCK_COUNTS_TO_CAPTURE = [1, 2, 4]  + [8 * i for i in range(1, 33)]
+                      
 class ModelRunner:
 
     def __init__(
@@ -42,8 +41,8 @@ class ModelRunner:
                                if model_config is not None else None)
         self.model = None
         self.block_size = None  # Set after initial profiling.
-
-        self.graph_runners: Dict[Tuple[int, int], CUDAGraphRunner] = {}
+        self.GraphRunnerClass = CUDAGraphRunner
+        self.graph_runners: Dict[Tuple[int, int], self.GraphRunnerClass] = {}
         self.graph_memory_pool = None  # Set during graph capture.
 
         self.max_context_len_to_capture = (
@@ -361,6 +360,7 @@ class ModelRunner:
             logger.info(f"Executing GraphRunner with batch {graph_batch_size}, block_count {graph_block_count} (context_len up to {graph_block_count*self.block_size}, currently {torch.max(input_metadata.context_lens).item()})")
         else:
             model_executable = self.model
+            logger.info(f"Executing EagerRunner.")
         hidden_states = model_executable(
             input_ids=input_tokens,
             positions=input_positions,
@@ -434,6 +434,9 @@ class ModelRunner:
         # NOTE: Capturing the largest batch size first may help reduce the
         # memory usage of CUDA graph.
         for idx, (batch_size, block_count) in enumerate(itertools.product(reversed(_BATCH_SIZES_TO_CAPTURE), reversed(_BLOCK_COUNTS_TO_CAPTURE))): 
+            # Skip capture of "out-of-bound" batch sizes and context lengths
+            if batch_size > self.scheduler_config.max_num_seqs or block_count > (self.max_context_len_to_capture + self.block_size - 1) // self.block_size: 
+                continue 
             # Create dummy input_metadata.
             input_metadata = InputMetadata(
                 prompt_lens=[],
@@ -443,7 +446,7 @@ class ModelRunner:
                 block_tables=block_tables[:batch_size, :block_count],
                 use_cuda_graph=True,
             )
-            graph_runner = CUDAGraphRunner(self.model)
+            graph_runner = self.GraphRunnerClass(self.model)
             logger.info(f"[{idx}/{len(_BATCH_SIZES_TO_CAPTURE)*len(_BLOCK_COUNTS_TO_CAPTURE)}] Capturing GraphRunner for batch {batch_size}, block_count {block_count}...")
             capture_start = time.time()
             graph_runner.capture(
@@ -604,20 +607,10 @@ def _make_tensor_with_pad(
 
 
 def _get_graph_batch_size(batch_size: int) -> int:
-    if batch_size <= 2:
-        return batch_size
-    elif batch_size <= 4:
-        return 4
-    else:
-        return (batch_size + 7) // 8 * 8
+    return _BATCH_SIZES_TO_CAPTURE[next(i for i,v in enumerate(_BATCH_SIZES_TO_CAPTURE) if  v >= batch_size)]
 
 def _get_graph_block_count(block_count: int) -> int:
-    if block_count <= 2:
-        return block_count
-    elif block_count <= 4:
-        return 4
-    else:
-        return (block_count + 7) // 8 * 8
+    return _BLOCK_COUNTS_TO_CAPTURE[next(i for i,v in enumerate(_BLOCK_COUNTS_TO_CAPTURE) if  v >= block_count)]
 
 
 def _async_h2d(data: list, dtype, pin_memory):
