@@ -357,7 +357,7 @@ class ModelRunner:
             graph_block_count = input_metadata.block_tables.shape[1] 
             graph_runner_key = (graph_batch_size, graph_block_count)
             model_executable = self.graph_runners[graph_runner_key]
-            logger.info(f"Executing GraphRunner with batch {graph_batch_size}, block_count {graph_block_count} (context_len up to {graph_block_count*self.block_size}, currently {torch.max(input_metadata.context_lens).item()})")
+            logger.info(f"Executing {self.GraphRunnerClass.__name__} with batch {graph_batch_size}, block_count {graph_block_count} (context_len up to {graph_block_count*self.block_size}, currently {torch.max(input_metadata.context_lens).item()})")
         else:
             model_executable = self.model
             logger.info(f"Executing EagerRunner.")
