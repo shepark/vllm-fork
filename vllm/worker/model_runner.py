@@ -22,7 +22,7 @@ _PAD_SLOT_ID = -1
 # NOTE: _get_graph_batch_size needs to be updated if this list is changed.
 _BATCH_SIZES_TO_CAPTURE = [1, 2, 4]  + [8 * i for i in range(1, 33)]
 _BLOCK_COUNTS_TO_CAPTURE = [1, 2, 4]  + [8 * i for i in range(1, 33)]
-                      
+  
 class ModelRunner:
 
     def __init__(
