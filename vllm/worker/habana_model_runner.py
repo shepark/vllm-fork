@@ -36,7 +36,7 @@ from vllm.sampling_params import SamplingParams, SamplingType
 from vllm.sequence import SamplerOutput, SequenceData, SequenceGroupMetadata
 from vllm.utils import (HabanaMemoryProfiler, async_tensor_h2d,
                         is_pin_memory_available, make_tensor_with_pad,
-                        maybe_expand_dim, pad_to_max_length)
+                        maybe_expand_dim, pad_to_max_length, format_bytes)
 
 logger = init_logger(__name__)
 
@@ -114,7 +114,7 @@ class HabanaModelRunner:
 
         self.model_memory_usage = m.consumed_memory
         logger.info(f"Loading model weights took "
-                    f"{self.model_memory_usage / float(2**30):.4f} GB")
+                    f"{format_bytes(self.model_memory_usage)} ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)")
 
         if self.lora_config:
             assert hasattr(self.model, "supported_lora_modules"
@@ -823,11 +823,13 @@ class HabanaModelRunner:
 
             total_valid_hpugraphs = len(valid_combinations)
             logger.info(f"Starting capture {total_valid_hpugraphs} valid HPUGraphs. Skipping capture of {total_combinations-total_valid_hpugraphs}/{total_combinations} graphs due to batch/context constraints.")
-            logger.info(f"Capture summary (row: batch_size; col: max_context_len):")
-            logger.info(tabulate.tabulate(df, tablefmt='mixed_outline', headers='keys', showindex="always"))
+            logger.debug(f"Capture summary (row: batch_size; col: max_context_len):")
+            logger.debug(tabulate.tabulate(df, tablefmt='mixed_outline', headers='keys', showindex="always"))
 
             graph_runner_name = self.graph_runner_class.__name__
+            graph_mem_usage_df = pd.DataFrame(index=list(reversed(sorted({b for b,c in valid_combinations}))), columns=list(reversed(sorted({c for b,c in valid_combinations}))))
             pbar = tqdm.tqdm(valid_combinations)
+            start_mem = HabanaMemoryProfiler.current_memory_usage()
             for idx, (batch_size, max_context_len) in enumerate(pbar): 
                 block_count = math.ceil(max_context_len / self.block_size)
                 # Create dummy attn_metadata.
@@ -856,10 +858,11 @@ class HabanaModelRunner:
                     )
                     self.set_active_loras(set(), lora_mapping)
                 graph_runner = self.graph_runner_class(self.model)
-                desc = f'Capturing {graph_runner_name} for batch {batch_size}, max_context_len {max_context_len}, block_count {block_count}'
+                local_start_mem = HabanaMemoryProfiler.current_memory_usage()
+                capture_start = time.time()
+                desc = f'Capturing {graph_runner_name} for batch {batch_size}, max_context_len {max_context_len}, block_count {block_count}, allocated {format_bytes(local_start_mem - start_mem)} device memory in total ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)'
                 pbar.set_description(desc)
                 logger.debug(f"[{idx}/{total_valid_hpugraphs}] {desc}...")
-                capture_start = time.time()
                 graph_runner.capture(
                     input_tokens[:batch_size],
                     input_positions[:batch_size],
@@ -868,12 +871,18 @@ class HabanaModelRunner:
                 )
                 self.graph_runners[(batch_size, block_count)] = graph_runner
                 capture_end = time.time()
-                logger.debug(f"[{idx}/{total_valid_hpugraphs}] {desc}... done in {capture_end-capture_start:.2f} seconds!")
+                local_end_mem = HabanaMemoryProfiler.current_memory_usage()
+                mem_usage_str = format_bytes(local_end_mem - local_start_mem)
+                graph_mem_usage_df[max_context_len][batch_size] = mem_usage_str
+                logger.debug(f"[{idx}/{total_valid_hpugraphs}] {desc}... done in {capture_end-capture_start:.2f} seconds! Took {mem_usage_str} of device memory ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)")
 
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
         # This usually takes < 10 seconds.
-        logger.info(f"Graph capturing finished in {elapsed_time:.0f} secs.")
+        end_mem = HabanaMemoryProfiler.current_memory_usage()
+        logger.info(f"Graph capturing finished in {elapsed_time:.0f} secs, allocated {format_bytes(end_mem - start_mem)} of device memory ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)")
+        logger.info(f"Graph memory allocation summary (row: batch_size; col: max_context_len):")
+        logger.info(tabulate.tabulate(graph_mem_usage_df, tablefmt='mixed_outline', headers='keys', showindex="always"))
 
     def __del__(self) -> None:
         # Delete the CUDA graphs before deleting the CuPy NCCL communicator.
@@ -931,12 +940,15 @@ class FakeHPUGraphRunnerWithWarmup:
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
     ) -> None:
+        htorch.core.mark_step()
         out = self.model(
             input_ids,
             positions,
             kv_caches,
             attn_metadata,
         )
+        htorch.core.mark_step()
+        htorch.hpu.synchronize()
         return
     
     def forward(
@@ -946,12 +958,15 @@ class FakeHPUGraphRunnerWithWarmup:
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
     ) -> torch.Tensor:
-        return self.model(
+        htorch.core.mark_step()
+        out = self.model(
             input_ids,
             positions,
             kv_caches,
             attn_metadata,
         )
+        htorch.core.mark_step()
+        return out
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -1034,14 +1049,79 @@ class HPUGraphRunner:
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
+
+class ExperimentalHPUGraphRunner:
+    def __init__(self, model: nn.Module):
+        self.model = model
+
+    def capture(
+        self,
+        input_ids: torch.Tensor,
+        positions: torch.Tensor,
+        kv_caches: List[torch.Tensor],
+        attn_metadata: AttentionMetadata,
+    ) -> None:
+        class ModelWrapper(torch.nn.Module):
+            def __init__(self, model):
+                super().__init__()
+                self.model = model
+                self.attn_backend = get_attn_backend(torch.bfloat16)
+            def forward(self, input_ids, positions, kv_caches, slot_mapping, context_lens, block_tables):
+                wrapper_attn_metadata = self.attn_backend.make_metadata(
+                    is_prompt=attn_metadata.is_prompt,
+                    slot_mapping=slot_mapping,
+                    prompt_lens=None,
+                    prompt_lens_tensor=None,
+                    num_prompt_tokens=0,
+                    num_generation_tokens=attn_metadata.num_generation_tokens,
+                    max_subquery_len=None,
+                    max_context_len=attn_metadata.max_context_len,
+                    max_prompt_len=None,
+                    subquery_start_loc=None,
+                    seq_start_loc=None,
+                    context_lens=context_lens,
+                    block_tables=block_tables,
+                    use_cuda_graph=True,
+                    kv_cache_dtype=attn_metadata.kv_cache_dtype,
+                )
+                return self.model(
+                    input_ids,
+                    positions,
+                    kv_caches,
+                    wrapper_attn_metadata
+                )
+        self.graph_model = htorch.hpu.wrap_in_hpu_graph(ModelWrapper(self.model))
+        out = self.graph_model(
+            input_ids,
+            positions,
+            kv_caches,
+            attn_metadata.slot_mapping,
+            attn_metadata.context_lens, 
+            attn_metadata.block_tables,
+        )
+        htorch.hpu.synchronize()
+        return
     
-@contextlib.contextmanager
-def _maybe_cupy_nccl():
-    if cupy_utils.is_initialized() and not custom_all_reduce.is_initialized():
-        with with_cupy_nccl_for_all_reduce():
-            yield
-    else:
-        yield
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        positions: torch.Tensor,
+        kv_caches: List[torch.Tensor],
+        attn_metadata: AttentionMetadata,
+    ) -> torch.Tensor:
+        out = self.graph_model(
+            input_ids,
+            positions,
+            kv_caches,
+            attn_metadata.slot_mapping,
+            attn_metadata.context_lens, 
+            attn_metadata.block_tables,
+        )
+        return out
+
+
+    def __call__(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
 
 
 def _get_graph_batch_size(batch_size: int) -> int:
@@ -1055,7 +1135,7 @@ def _get_graph_batch_size(batch_size: int) -> int:
     elif batch_size <= 4:
         return 4
     elif batch_size <= 8:
-        return 4
+        return 8
     else:
         return ((batch_size + _BATCH_SIZE_ALIGNMENT - 1) //
                 _BATCH_SIZE_ALIGNMENT * _BATCH_SIZE_ALIGNMENT)

@@ -12,7 +12,7 @@ from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.sequence import SamplerOutput, SequenceGroupMetadata
 from vllm.utils import (get_distributed_init_method, get_ip, get_open_port,
-                        make_async)
+                        make_async, HabanaMemoryProfiler, format_bytes)
 import os
 import contextlib
 logger = init_logger(__name__)
@@ -97,10 +97,17 @@ class HabanaExecutor(ExecutorBase):
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
         # Initialize the cache.
-        self.driver_worker.init_cache_engine(cache_config=self.cache_config)
+        with HabanaMemoryProfiler() as cache_init_m:
+            self.driver_worker.init_cache_engine(cache_config=self.cache_config)
+        logger.info(f"init_cache_engine took "
+                    f"{format_bytes(cache_init_m.consumed_memory)} ({cache_init_m.consumed_memory/HabanaMemoryProfiler.total_memory():.2%} of total memory, gpu_memory_utilization: {self.cache_config.gpu_memory_utilization}, {format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)")
+
         # Warm up the model. This includes capturing the model into CUDA graph
         # if enforce_eager is False.
-        self.driver_worker.warm_up_model()
+        with HabanaMemoryProfiler() as warmup_m:
+            self.driver_worker.warm_up_model()
+        logger.info(f"Model warmup took "
+                    f"{warmup_m.consumed_memory / float(2**30):.4f} GB ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)")
 
     def execute_model(self,
                       seq_group_metadata_list: List[SequenceGroupMetadata],

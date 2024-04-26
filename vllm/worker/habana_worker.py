@@ -7,6 +7,7 @@ import os
 from typing import Dict, List, Optional, Set, Tuple
 
 import torch
+import habana_frameworks.torch as htorch
 import torch.distributed
 
 from vllm.config import (CacheConfig, DeviceConfig, LoRAConfig, ModelConfig,
@@ -139,6 +140,7 @@ class HabanaWorker:
                                         self.parallel_config)
         self.hpu_cache = self.cache_engine.gpu_cache
         self.model_runner.set_block_size(self.cache_engine.block_size)
+        htorch.hpu.synchronize() # we want to materialize cache tensors before we proceed with graph capture/execution
 
     def warm_up_model(self) -> None:
         if not self.model_config.enforce_eager:

@@ -391,23 +391,43 @@ class HabanaMemoryProfiler:
     def __init__(self, device=None):
         self.device = device
 
-    def current_memory_usage(self) -> float:
+    def current_memory_usage() -> float:
         # Return the memory usage in bytes.
         free_hpu_memory, total_hpu_memory = torch.hpu.mem_get_info()
-        mem = total_hpu_memory - free_hpu_memory
-        return mem
+        return total_hpu_memory - free_hpu_memory
+    
+    def current_free_memory() -> float:
+        # Return the memory usage in bytes.
+        free_hpu_memory, _ = torch.hpu.mem_get_info()
+        return free_hpu_memory
+    
+    def total_memory() -> float:
+        # Return the memory usage in bytes.
+        _, total_hpu_memory = torch.hpu.mem_get_info()
+        return total_hpu_memory
 
     def __enter__(self):
-        self.initial_memory = self.current_memory_usage()
+        self.initial_memory = HabanaMemoryProfiler.current_memory_usage()
         # This allows us to call methods of the context manager if needed
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.final_memory = self.current_memory_usage()
+        self.final_memory = HabanaMemoryProfiler.current_memory_usage()
         self.consumed_memory = self.final_memory - self.initial_memory
 
         # Force garbage collection
         gc.collect()
+
+# Adapted from https://stackoverflow.com/a/49361727
+def format_bytes(size):
+    # 2**10 = 1024
+    power = 2**10
+    n = 0
+    power_labels = {0 : '', 1: 'Ki', 2: 'Mi', 3: 'Gi', 4: 'Ti'}
+    while abs(size) > power:
+        size /= power
+        n += 1
+    return f'{size:.4g} {power_labels[n]+"B"}'
 
 
 def pad_to_max_length(x: List[int], max_len: int, pad: int) -> List[int]:
