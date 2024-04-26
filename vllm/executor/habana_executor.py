@@ -107,7 +107,7 @@ class HabanaExecutor(ExecutorBase):
         with HabanaMemoryProfiler() as warmup_m:
             self.driver_worker.warm_up_model()
         logger.info(f"Model warmup took "
-                    f"{warmup_m.consumed_memory / float(2**30):.4f} GB ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)")
+                    f"{format_bytes(warmup_m.consumed_memory)} ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)")
 
     def execute_model(self,
                       seq_group_metadata_list: List[SequenceGroupMetadata],
