@@ -11,12 +11,15 @@ import tqdm
 import pandas as pd
 import tabulate
 
+import os
+import contextlib
 import math
 import itertools
 import numpy as np
 import torch
 import torch.nn as nn
 import habana_frameworks.torch as htorch
+from habana_frameworks.torch.hpu.metrics import metric_localcontext
 
 from vllm.attention import AttentionMetadata, get_attn_backend
 from vllm.config import (DeviceConfig, LoRAConfig, ModelConfig, ParallelConfig,
@@ -85,7 +88,7 @@ class HabanaModelRunner:
         self.model = None
         self.block_size = None  # Set after initial profiling.
         self.lora_manager = None
-        self.graph_runner_class = FakeHPUGraphRunnerWithWarmup
+        self.graph_runner_class = HPUGraphRunner
         self.graph_runners: Dict[Tuple[int, int], self.graph_runner_class] = {}
 
         self.max_context_len_to_capture = (
@@ -830,6 +833,9 @@ class HabanaModelRunner:
             graph_mem_usage_df = pd.DataFrame(index=list(reversed(sorted({b for b,c in valid_combinations}))), columns=list(reversed(sorted({c for b,c in valid_combinations}))))
             pbar = tqdm.tqdm(valid_combinations)
             start_mem = HabanaMemoryProfiler.current_memory_usage()
+            log_graph_compilation_all = os.environ.get('VLLM_HPU_LOG_STEP_GRAPH_COMPILATION_ALL', '0') != '0'
+            log_graph_compilation = os.environ.get('VLLM_HPU_LOG_STEP_GRAPH_COMPILATION', '0') != '0' or log_graph_compilation_all
+        
             for idx, (batch_size, max_context_len) in enumerate(pbar): 
                 block_count = math.ceil(max_context_len / self.block_size)
                 # Create dummy attn_metadata.
@@ -862,13 +868,17 @@ class HabanaModelRunner:
                 capture_start = time.time()
                 desc = f'Capturing {graph_runner_name} for batch {batch_size}, max_context_len {max_context_len}, block_count {block_count}, allocated {format_bytes(local_start_mem - start_mem)} device memory in total ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)'
                 pbar.set_description(desc)
-                logger.debug(f"[{idx}/{total_valid_hpugraphs}] {desc}...")
-                graph_runner.capture(
-                    input_tokens[:batch_size],
-                    input_positions[:batch_size],
-                    kv_caches,
-                    attn_metadata,
-                )
+                logger.info(f"[{idx}/{total_valid_hpugraphs}] {desc}...")
+                profiling_ctx = contextlib.nullcontext() if not (log_graph_compilation_all or log_graph_compilation) else metric_localcontext("graph_compilation")
+                with profiling_ctx as gc_local_metric:
+                    graph_runner.capture(
+                        input_tokens[:batch_size],
+                        input_positions[:batch_size],
+                        kv_caches,
+                        attn_metadata,
+                    )
+                if (log_graph_compilation and gc_local_metric.stats()[0][1] > 0) or log_graph_compilation_all:
+                    logger.info(f"VLLM_HPU_STEP_GRAPH_COMPILATION: {gc_local_metric.stats()}, {graph_runner_name}; batch {batch_size}, max_context_len {max_context_len}, block_count {block_count}")
                 self.graph_runners[(batch_size, block_count)] = graph_runner
                 capture_end = time.time()
                 local_end_mem = HabanaMemoryProfiler.current_memory_usage()
