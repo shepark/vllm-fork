@@ -868,7 +868,7 @@ class HabanaModelRunner:
                 capture_start = time.time()
                 desc = f'Capturing {graph_runner_name} for batch {batch_size}, max_context_len {max_context_len}, block_count {block_count}, allocated {format_bytes(local_start_mem - start_mem)} device memory in total ({format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)'
                 pbar.set_description(desc)
-                logger.info(f"[{idx}/{total_valid_hpugraphs}] {desc}...")
+                logger.debug(f"[{idx}/{total_valid_hpugraphs}] {desc}...")
                 profiling_ctx = contextlib.nullcontext() if not (log_graph_compilation_all or log_graph_compilation) else metric_localcontext("graph_compilation")
                 with profiling_ctx as gc_local_metric:
                     graph_runner.capture(
