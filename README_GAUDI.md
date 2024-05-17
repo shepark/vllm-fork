@@ -97,7 +97,7 @@ Performance tips
 ================
 
 -   We recommend running inference on Gaudi 2 with
-    [block\_size]{.title-ref} of 128 for BF16 data type. Using default
+    `block_size` of 128 for BF16 data type. Using default
     values (16, 32) might lead to sub-optimal performance due to Matrix
     Multiplication Engine under-utilization (see [Gaudi
     Architecture](https://docs.habana.ai/en/latest/Gaudi_Overview/Gaudi_Architecture.html)).
