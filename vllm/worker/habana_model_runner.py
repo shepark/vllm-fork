@@ -12,6 +12,7 @@ import itertools
 import operator
 import torch
 import habana_frameworks.torch as htorch
+import habana_quantization_toolkit
 
 from vllm.attention import (AttentionMetadata, AttentionMetadataPerStage,
                             get_attn_backend)
@@ -196,6 +197,8 @@ class HabanaModelRunner:
                 parallel_config=self.parallel_config,
                 scheduler_config=self.scheduler_config,
             )
+        if self.model_config.quantization == 'hqt':
+            habana_quantization_toolkit.prep_model(self.model)
 
         self.model_memory_usage = m.consumed_memory
         logger.info(f"Loading model weights took "
@@ -812,6 +815,7 @@ class HabanaModelRunner:
 
     @torch.inference_mode()
     def warmup_model(self, kv_caches: List[torch.Tensor]) -> None:
+        return
         self.profiler.start('internal', 'warmup')
         times = 1  # TODO: this is will be updated once HPU graphs are reintroduced
         scenarios = []
@@ -831,6 +835,17 @@ class HabanaModelRunner:
         logger.info(f"Warmup finished in {elapsed_time:.0f} secs, allocated {format_bytes(end_mem - start_mem)} of device memory")
         self.profiler.end()
 
+    def shutdown_hqt(self):
+        print('hqt shutdown')
+        if model_config := getattr(self, "model_config", None):
+            if getattr(model_config, "quantization", None) == 'hqt':
+                print('hqt shutdown start')
+                habana_quantization_toolkit.finish_measurements(self.model)
+                print('hqt shutdown')
+    
+    def __del__(self):
+        self.shutdown_hqt()
+        
     @property
     def vocab_size(self) -> int:
         return self.model_config.get_vocab_size()

@@ -128,8 +128,13 @@ class HabanaExecutor(ExecutorBase):
         # GPUExecutor will always be healthy as long as
         # it's running.
         return
+    
+    def shutdown(self) -> None:
+        self.driver_worker.shutdown_hqt()
 
-
+    def __del__(self):
+        self.shutdown()
+        
 class HabanaExecutorAsync(HabanaExecutor, ExecutorAsyncBase):
 
     async def execute_model_async(

@@ -10,6 +10,8 @@ from vllm.model_executor.layers.quantization.gptq_marlin import (
     GPTQMarlinConfig)
 from vllm.model_executor.layers.quantization.marlin import MarlinConfig
 from vllm.model_executor.layers.quantization.squeezellm import SqueezeLLMConfig
+from vllm.model_executor.layers.quantization.hqt import HQTConfig
+
 
 QUANTIZATION_METHODS: Dict[str, Type[QuantizationConfig]] = {
     "aqlm": AQLMConfig,
@@ -19,7 +21,8 @@ QUANTIZATION_METHODS: Dict[str, Type[QuantizationConfig]] = {
     "squeezellm": SqueezeLLMConfig,
     "gptq_marlin": GPTQMarlinConfig,
     "marlin": MarlinConfig,
-}
+    "hqt": HQTConfig,
+}   
 
 
 def get_quantization_config(quantization: str) -> Type[QuantizationConfig]:
