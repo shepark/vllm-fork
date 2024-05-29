@@ -8,7 +8,6 @@ from typing import Dict, List, Optional, Tuple, Type
 import os
 import torch
 import math
-import vllm.hpu.xops as xops
 from typing import Optional
 import vllm.hpu.utils
 from vllm.hpu.attn_bias import (AttentionBias,
@@ -152,6 +151,7 @@ class HabanaAttentionImpl(AttentionImpl, torch.nn.Module):
         self.qk_matmul = Matmul()
         self.softmax = Softmax()
         self.kv_matmul = Matmul()
+        self.key_value_cache = vllm.hpu.utils.VLLMKVCache()
         self.scale = float(scale)
         self.num_kv_heads = num_heads if num_kv_heads is None else num_kv_heads
         self.sliding_window = sliding_window
@@ -272,11 +272,11 @@ class HabanaAttentionImpl(AttentionImpl, torch.nn.Module):
             # Reshape the input keys and values and store them in the cache.
             # If kv_cache is not provided, the new key and value tensors are
             # not cached. This happens during the initial memory profiling run.
-            HabanaPagedAttention.write_to_paged_cache(key, value, key_cache,
-                                                      value_cache,
-                                                      attn_metadata.slot_mapping,
-                                                      attn_metadata.kv_cache_dtype,
-                                                      attn_metadata.prefill_metadata is not None)
+            key_cache, value_cache = self.key_value_cache(key, value, key_cache,
+                                                          value_cache,
+                                                          attn_metadata.slot_mapping,
+                                                          attn_metadata.kv_cache_dtype,
+                                                          attn_metadata.prefill_metadata is not None)
 
         if prefill_meta := attn_metadata.prefill_metadata:
             # Prompt run.
