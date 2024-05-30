@@ -12,6 +12,7 @@ import itertools
 import operator
 import torch
 import habana_frameworks.torch as htorch
+import habana_quantization_toolkit
 
 from vllm.attention import (AttentionMetadata, AttentionMetadataPerStage,
                             get_attn_backend)
@@ -196,6 +197,10 @@ class HabanaModelRunner:
                 parallel_config=self.parallel_config,
                 scheduler_config=self.scheduler_config,
             )
+            if self.model_config.quantization == 'hqt':
+                habana_quantization_toolkit.prep_model(self.model)
+                import habana_frameworks.torch.core as htcore
+                htcore.hpu_initialize(self.model, mark_only_scales_as_const=True)
 
         self.model_memory_usage = m.consumed_memory
         logger.info(f"Loading model weights took "
@@ -693,6 +698,9 @@ class HabanaModelRunner:
                 sampling_metadata, lora_requests, lora_mapping,
                 multi_modal_input)
 
+    def finish_measurement(self):
+        habana_quantization_toolkit.finish_measurements(self.model)
+
     @torch.inference_mode()
     def execute_model(
         self,
@@ -821,15 +829,34 @@ class HabanaModelRunner:
 
         start_mem = HabanaMemoryProfiler.current_memory_usage()
         start_time = time.perf_counter()
+        counter = 0
         for i, (batch_size, seq_len, is_prompt) in enumerate(scenarios):
             mem_usage = 100.0 * HabanaMemoryProfiler.current_memory_usage() / HabanaMemoryProfiler.total_memory()
             logger.info(f"[Warmup][{i+1}/{len(scenarios)}] batch_size:{batch_size} seq_len:{seq_len} is_prompt:{is_prompt} mem_usage:{mem_usage:0.1f}%")
-            self.warmup_scenario(batch_size, seq_len, is_prompt, kv_caches)
+            try:
+                self.warmup_scenario(batch_size, seq_len, is_prompt, kv_caches)
+            except:
+                print(f"Failed on scenario {i+1}: batch_size={batch_size}, seq_len={seq_len}, is_prompt={is_prompt}")
+                counter = counter+1
+
+        print(f"FAILED scenarios={counter}")
         end_time = time.perf_counter()
         end_mem = HabanaMemoryProfiler.current_memory_usage()
         elapsed_time = end_time - start_time
         logger.info(f"Warmup finished in {elapsed_time:.0f} secs, allocated {format_bytes(end_mem - start_mem)} of device memory")
         self.profiler.end()
+
+    def shutdown_hqt(self):
+        print('hqt shutdown')
+        if model_config := getattr(self, "model_config", None):
+            if getattr(model_config, "quantization", None) == 'hqt':
+                print('hqt shutdown start')
+                if habana_quantization_toolkit is not None:
+                    habana_quantization_toolkit.finish_measurements(self.model)
+                print('hqt shutdown')
+
+    def __del__(self):
+        self.shutdown_hqt()
 
     @property
     def vocab_size(self) -> int:
