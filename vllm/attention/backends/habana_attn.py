@@ -168,7 +168,6 @@ class HabanaAttentionImpl(AttentionImpl, torch.nn.Module):
                 f"Head size {head_size} is not supported by PagedAttention. "
                 f"Supported head sizes are: {suppored_head_sizes}.")
 
-    @vllm.hpu.utils.with_mark_steps
     def prompt_attention(self,
             query: torch.Tensor,
             key: torch.Tensor,
@@ -200,7 +199,6 @@ class HabanaAttentionImpl(AttentionImpl, torch.nn.Module):
     def _fetch_from_cache(self, cache, blocks):
         return [cache.index_select(0, blocks[:, i]) for i in range(blocks.size(1))]
 
-    @vllm.hpu.utils.with_mark_steps
     def paged_attention_v1(self, query, key_cache, value_cache, head_mapping, scale, block_tables, context_lens, block_size, max_context_len, alibi_slopes, kv_cache_dtype=None)  -> None:
         seq_len = block_tables.size(1)
         batch_size, query_heads, _ = query.shape
