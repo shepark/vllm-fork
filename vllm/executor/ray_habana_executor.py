@@ -272,7 +272,11 @@ class RayHabanaExecutor(DistributedGPUExecutor):
         if dead_actors:
             raise RuntimeError("At least one Worker is dead. "
                                f"Dead Workers: {dead_actors}. ")
+    def shutdown(self):
+        self._run_workers("shutdown_hqt")
 
+    def __del__(self):
+        self.shutdown()
 
 class RayHabanaExecutorAsync(RayHabanaExecutor, DistributedGPUExecutorAsync):
 
