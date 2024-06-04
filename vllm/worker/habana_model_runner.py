@@ -282,6 +282,7 @@ class HabanaModelRunner:
             if self.model_config.quantization == 'hqt':
                 habana_quantization_toolkit.prep_model(self.model)
             # FIXME: Running with disable_tensor_cache=True causes RuntimeErrors. This needs to be debugged
+            htorch.core.hpu_initialize(self.model, mark_only_scales_as_const=True)
             self.model = htorch.hpu.wrap_in_hpu_graph(HpuModelAdapter(self.model))
 
         self.model_memory_usage = m.consumed_memory
@@ -807,6 +808,9 @@ class HabanaModelRunner:
                         {'prefill_metadata': prefill_metadata,
                          'decode_metadata': decode_metadata})
 
+    def finish_measurement(self):
+        habana_quantization_toolkit.finish_measurements(self.model)
+
     @torch.inference_mode()
     def execute_model(
         self,
@@ -1009,12 +1013,13 @@ class HabanaModelRunner:
         if model_config := getattr(self, "model_config", None):
             if getattr(model_config, "quantization", None) == 'hqt':
                 print('hqt shutdown start')
-                habana_quantization_toolkit.finish_measurements(self.model)
+                if habana_quantization_toolkit is not None:
+                    habana_quantization_toolkit.finish_measurements(self.model)
                 print('hqt shutdown')
-    
+
     def __del__(self):
         self.shutdown_hqt()
-        
+
     @property
     def vocab_size(self) -> int:
         return self.model_config.get_vocab_size()

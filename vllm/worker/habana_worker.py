@@ -101,6 +101,9 @@ class HabanaWorker(WorkerBase):
         set_random_seed(self.model_config.seed)
 
     def load_model(self):
+        if self.model_config.quantization == 'hqt':
+            import habana_frameworks.torch.core as htcore
+            htcore.hpu_set_env()
         self.model_runner.load_model()
 
     @torch.inference_mode()
@@ -183,6 +186,9 @@ class HabanaWorker(WorkerBase):
             self.cache_engine.swap_out(blocks_to_swap_out)
         if blocks_to_copy.numel() > 0:
             self.cache_engine.copy(blocks_to_copy)
+
+    def finish_measurement(self):
+        self.model_runner.finish_measurement()
 
     @torch.inference_mode()
     def execute_model(

@@ -83,6 +83,9 @@ class HabanaExecutor(ExecutorBase):
         logger.info(f"init_cache_engine took "
                     f"{format_bytes(cache_init_m.consumed_memory)} ({cache_init_m.consumed_memory/HabanaMemoryProfiler.total_memory():.2%} of total memory, gpu_memory_utilization: {self.cache_config.gpu_memory_utilization}, {format_bytes(HabanaMemoryProfiler.current_memory_usage())}/{format_bytes(HabanaMemoryProfiler.total_memory())} used)")
 
+    def finish_measurement(self):
+        self.driver_worker.finish_measurement()
+
     def execute_model(
             self,
             execute_model_req: ExecuteModelRequest) -> List[SamplerOutput]:

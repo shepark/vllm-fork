@@ -207,7 +207,7 @@ def _is_hpu() -> bool:
     return is_hpu_available # FIXME(kzawora): HPU autodetection sporadically fails on certain clients. Find the cause and fix it.
     try:
         subprocess.run(["hl-smi"], capture_output=True, check=True)
-    except (FileNotFoundError, PermissionError, subprocess.CalledProcessError):
+    except (FileNotFoundError, NotADirectoryError, PermissionError, subprocess.CalledProcessError):
         if not os.path.exists('/dev/accel/accel0') and not os.path.exists('/dev/accel/accel_controlD0'):
             is_hpu_available = False
     return is_hpu_available
