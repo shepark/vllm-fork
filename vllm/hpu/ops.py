@@ -36,7 +36,7 @@ def fetch_from_cache(cache, blocks):
 
 
 @hpu_utils.with_mark_steps
-def paged_attention_v1(query, key_cache, value_cache, head_mapping, scale, block_tables, context_lens, block_size, alibi_slopes, kv_cache_dtype=None) -> None:
+def paged_attention_v1(query, key_cache, value_cache, head_mapping, scale, block_tables, context_lens, block_size, alibi_slopes, kv_cache_dtype=None, qk_matmul_op=torch.matmul, kv_matmul_op=torch.matmul, softmax_op=torch.softmax) -> None:
     seq_len = block_tables.size(1)
     batch_size, query_heads, _ = query.shape
     _, kv_heads, _, _ = key_cache.shape
@@ -53,11 +53,10 @@ def paged_attention_v1(query, key_cache, value_cache, head_mapping, scale, block
         keys = [k.unflatten(1, (kv_heads, 1)) for k in keys]
         mask = mask.unsqueeze(2)
 
-    attn_weights = [torch.matmul(query, k) for k in keys]
-    attn_weights = (torch.cat(attn_weights, dim=-1)
-                    .mul_(scale)
-                    .masked_fill(mask, min_inf)
-                    .softmax(dim=-1))
+    attn_weights = [qk_matmul_op(query, k) for k in keys]
+    attn_weights = softmax_op(torch.cat(attn_weights, dim=-1)
+                                   .mul_(scale)
+                                   .masked_fill(mask, min_inf), dim=-1)
 
     values = fetch_from_cache(value_cache, block_tables)
     if PA_SPLIT_VALUE:
@@ -67,7 +66,7 @@ def paged_attention_v1(query, key_cache, value_cache, head_mapping, scale, block
         attn_weights = [attn_weights]
     if query_heads != kv_heads:
         values = [v.unflatten(1, (kv_heads, 1)) for v in values]
-    attn_weights = [torch.matmul(a, v.transpose(-1, -2)).squeeze(-2) for a, v in zip(attn_weights, values)]
+    attn_weights = [kv_matmul_op(a, v.transpose(-1, -2)).squeeze(-2) for a, v in zip(attn_weights, values)]
     if query_heads != kv_heads:
         attn_weights = [a.flatten(1, 2) for a in attn_weights]
     attn_weights = sum(attn_weights)

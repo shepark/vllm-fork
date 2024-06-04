@@ -85,6 +85,9 @@ class HabanaPagedAttention:
         scale: float,
         alibi_slopes: Optional[torch.Tensor],
         kv_scale: float,
+        qk_matmul_op=torch.matmul,
+        kv_matmul_op=torch.matmul,
+        softmax_op=torch.softmax
     ) -> torch.Tensor:
         block_size = value_cache.shape[3]
         return ops.paged_attention_v1(
@@ -98,6 +101,9 @@ class HabanaPagedAttention:
             block_size,
             alibi_slopes,
             kv_cache_dtype,
+            qk_matmul_op=qk_matmul_op,
+            kv_matmul_op=kv_matmul_op,
+            softmax_op=softmax_op
         )
 
     @staticmethod
