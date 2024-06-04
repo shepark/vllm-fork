@@ -279,11 +279,12 @@ class HabanaModelRunner:
                 parallel_config=self.parallel_config,
                 scheduler_config=self.scheduler_config,
             )
-            if self.model_config.quantization == 'hqt':
-                habana_quantization_toolkit.prep_model(self.model)
             # FIXME: Running with disable_tensor_cache=True causes RuntimeErrors. This needs to be debugged
             htorch.core.hpu_initialize(self.model, mark_only_scales_as_const=True)
             self.model = htorch.hpu.wrap_in_hpu_graph(HpuModelAdapter(self.model))
+            if self.model_config.quantization == 'hqt':
+                logger.info("Preparing model with HQT")
+                habana_quantization_toolkit.prep_model(self.model.model)
 
         self.model_memory_usage = m.consumed_memory
         logger.info(f"Loading model weights took "
@@ -1009,13 +1010,12 @@ class HabanaModelRunner:
         self.profiler.end()
 
     def shutdown_hqt(self):
-        print('hqt shutdown')
+        logger.info('hqt shutdown')
         if model_config := getattr(self, "model_config", None):
             if getattr(model_config, "quantization", None) == 'hqt':
-                print('hqt shutdown start')
-                if habana_quantization_toolkit is not None:
-                    habana_quantization_toolkit.finish_measurements(self.model)
-                print('hqt shutdown')
+                logger.info('hqt shutdown start')
+                habana_quantization_toolkit.finish_measurements(self.model.model)
+                logger.info('hqt shutdown done')
 
     def __del__(self):
         self.shutdown_hqt()
