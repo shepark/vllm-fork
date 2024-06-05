@@ -219,8 +219,10 @@ class DefaultModelLoader(BaseModelLoader):
                    vision_language_config: Optional[VisionLanguageConfig],
                    parallel_config: ParallelConfig,
                    scheduler_config: SchedulerConfig) -> nn.Module:
+        is_hqt_used = model_config.quantization == 'hqt'
         with set_default_torch_dtype(model_config.dtype):
-            with torch.device(device_config.device):
+            device = device_config.device if not is_hqt_used else 'cpu'
+            with torch.device(device):
                 model = _initialize_model(model_config, self.load_config,
                                           lora_config, vision_language_config)
             model.load_weights(
@@ -230,6 +232,12 @@ class DefaultModelLoader(BaseModelLoader):
                                                model,
                                                "fall_back_to_pt_during_load",
                                                True)), )
+            if is_hqt_used:
+                # model is on cpu with bf16 weights - now move it to HPU with fp8 weights
+                # model = model.to('hpu')
+                # torch.hpu.synchronize()
+                pass
+                
             for _, module in model.named_modules():
                 quant_method = getattr(module, "quant_method", None)
                 if quant_method is not None:
