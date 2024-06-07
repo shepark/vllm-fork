@@ -287,7 +287,7 @@ class HabanaModelRunner:
 
             # FIXME: Running with disable_tensor_cache=True causes RuntimeErrors. This needs to be debugged
             with HabanaMemoryProfiler() as m_wrap:
-                self.model = _maybe_wrap_in_hpu_graph(self.model)
+                self.model = _maybe_wrap_in_hpu_graph(self.model, enforce_eager=self.enforce_eager)
             logger.info(f"Wrapping in HPU Graph took {m_wrap.get_summary_string()}")
             
         self.model_memory_usage = m.consumed_device_memory
