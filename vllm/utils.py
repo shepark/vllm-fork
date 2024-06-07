@@ -409,14 +409,18 @@ def create_kv_caches_with_random(
     torch_dtype = get_kv_cache_torch_dtype(cache_dtype, model_dtype)
 
     scale = head_size**-0.5
-    x = 16 // torch.tensor([], dtype=torch_dtype).element_size()
-    key_cache_shape = (num_blocks, num_heads, head_size // x, block_size, x)
+    if is_hpu():
+        key_cache_shape = (num_blocks, num_heads, head_size, block_size)
+    else:
+        x = 16 // torch.tensor([], dtype=torch_dtype).element_size()
+        key_cache_shape = (num_blocks, num_heads, head_size // x, block_size, x)
     key_caches = []
     for _ in range(num_layers):
         key_cache = torch.empty(size=key_cache_shape,
                                 dtype=torch_dtype,
                                 device=device)
-        if cache_dtype in ["auto", "half", "bfloat16", "float"]:
+        cache_dtype = str(cache_dtype)
+        if cache_dtype in ["auto", "half", "float16", "torch.float16", "torch.bfloat16", "torch.float32"]:
             key_cache.uniform_(-scale, scale)
         elif cache_dtype == 'fp8':
             _generate_random_fp8(key_cache, -scale, scale)
@@ -431,7 +435,7 @@ def create_kv_caches_with_random(
         value_cache = torch.empty(size=value_cache_shape,
                                   dtype=torch_dtype,
                                   device=device)
-        if cache_dtype in ["auto", "half", "bfloat16", "float"]:
+        if cache_dtype in ["auto", "half", "torch.float16", "torch.bfloat16", "torch.float32"]:
             value_cache.uniform_(-scale, scale)
         elif cache_dtype == 'fp8':
             _generate_random_fp8(value_cache, -scale, scale)
@@ -496,33 +500,55 @@ class HabanaMemoryProfiler:
     def __init__(self, device=None):
         self.device = device
 
-    def current_memory_usage() -> float:
-        # Return the memory usage in bytes.
+    def current_device_memory_usage() -> float:
+        # Return the device memory usage in bytes.
         free_hpu_memory, total_hpu_memory = torch.hpu.mem_get_info()
         return total_hpu_memory - free_hpu_memory
     
-    def current_free_memory() -> float:
-        # Return the memory usage in bytes.
+    def current_free_device_memory() -> float:
+        # Return the device memory usage in bytes.
         free_hpu_memory, _ = torch.hpu.mem_get_info()
         return free_hpu_memory
     
-    def total_memory() -> float:
-        # Return the memory usage in bytes.
+    def total_device_memory() -> float:
+        # Return the device memory usage in bytes.
         _, total_hpu_memory = torch.hpu.mem_get_info()
         return total_hpu_memory
+
+    def current_host_memory_usage() -> float:
+        # Return the host memory usage in bytes.
+        return HabanaMemoryProfiler.total_host_memory() - HabanaMemoryProfiler.current_free_host_memory()
+    
+    def current_free_host_memory() -> float:
+        # Return the host memory usage in bytes.
+        return psutil.virtual_memory().available
+    
+    def total_host_memory() -> float:
+        # Return the host memory usage in bytes.
+        return psutil.virtual_memory().total
+
+    def get_summary_string(self):
+        if getattr(self, 'final_device_memory', None) is None or getattr(self, 'final_host_memory', None) is None:
+            raise RuntimeError("HabanaMemoryProfiler.get_summary_string() can only be called after closing context manager")
+        return (f"{format_bytes(self.consumed_device_memory)} of device memory ({format_bytes(self.final_device_memory)}/{format_bytes(HabanaMemoryProfiler.total_device_memory())} used) and "
+                f"{format_bytes(self.consumed_host_memory)} of host memory ({format_bytes(self.final_host_memory)}/{format_bytes(HabanaMemoryProfiler.total_host_memory())} used)")
 
     def __enter__(self):
         # Force garbage collection
         gc.collect()
-        self.initial_memory = HabanaMemoryProfiler.current_memory_usage()
+        self.initial_device_memory = HabanaMemoryProfiler.current_device_memory_usage()
+        self.initial_host_memory = HabanaMemoryProfiler.current_host_memory_usage()
         # This allows us to call methods of the context manager if needed
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Force garbage collection
         gc.collect()
-        self.final_memory = HabanaMemoryProfiler.current_memory_usage()
-        self.consumed_memory = self.final_memory - self.initial_memory
+        self.final_device_memory = HabanaMemoryProfiler.current_device_memory_usage()
+        self.final_host_memory = HabanaMemoryProfiler.current_host_memory_usage()
+        self.consumed_device_memory = self.final_device_memory - self.initial_device_memory
+        self.consumed_host_memory = self.final_host_memory - self.initial_host_memory
+        
 
 
 # Adapted from https://stackoverflow.com/a/49361727
