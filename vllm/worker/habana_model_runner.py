@@ -1056,12 +1056,12 @@ class HabanaProfilerCounterHelper():
             counters[f'{phase}_real_in_throughput'] = prompt_real_in_throughput
 
         # KV cache might not be created yet (e.g. for profiling run)
-        if cache_config.num_gpu_blocks is not None:
+        if cache_config.num_gpu_blocks is not None and cache_config.num_gpu_blocks != 0:
             cache_num_blocks_used = [math.ceil(sl/cache_config.block_size) for sl in real_seq_lens]
             cache_total_num_blocks_used = sum(cache_num_blocks_used)
             num_cache_blocks = cache_config.num_gpu_blocks 
             cache_total_num_free_blocks = num_cache_blocks - cache_total_num_blocks_used
-            cache_computed_utilization = cache_total_num_blocks_used / (num_cache_blocks - cache_total_num_blocks_used)
+            cache_computed_utilization = cache_total_num_blocks_used / num_cache_blocks
             batch_block_utilization = sum(cache_num_blocks_used) / (batch_size_padded * (seq_len/cache_config.block_size))
             counters['cache_num_blocks_used'] = cache_total_num_blocks_used
             counters['cache_num_free_blocks'] = cache_total_num_free_blocks
