@@ -1062,7 +1062,7 @@ class HabanaProfilerCounterHelper():
             num_cache_blocks = cache_config.num_gpu_blocks 
             cache_total_num_free_blocks = num_cache_blocks - cache_total_num_blocks_used
             cache_computed_utilization = cache_total_num_blocks_used / num_cache_blocks
-            batch_block_utilization = sum(cache_num_blocks_used) / (batch_size_padded * (seq_len/cache_config.block_size))
+            batch_block_utilization = sum(cache_num_blocks_used) / (batch_size_padded * math.ceil(seq_len/cache_config.block_size))
             counters['cache_num_blocks_used'] = cache_total_num_blocks_used
             counters['cache_num_free_blocks'] = cache_total_num_free_blocks
             counters['cache_computed_utilization'] = cache_computed_utilization
