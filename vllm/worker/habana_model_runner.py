@@ -271,7 +271,6 @@ class HabanaModelRunner:
         # Profiler stats
         self.profiler_counter_helper = HabanaProfilerCounterHelper()
 
-        
         self._setup_buckets()
 
     def load_model(self) -> None:
@@ -885,7 +884,14 @@ class HabanaModelRunner:
             # Stop recording 'execute_model' event
             self.profiler.end()
             event_end = self.profiler.get_timestamp_us()
-            counters = self.profiler_counter_helper.get_counter_dict(self.cache_config, event_end-event_start, seq_len, batch_size_padded=batch_size_padded, real_batch_size=real_batch_size, seq_group_metadata_list=seq_group_metadata_list, is_prompt=is_prompt)
+            counters = self.profiler_counter_helper.get_counter_dict(
+                cache_config=self.cache_config, 
+                duration=event_end-event_start, 
+                seq_len=seq_len, 
+                batch_size_padded=batch_size_padded, 
+                real_batch_size=real_batch_size, 
+                seq_group_metadata_list=seq_group_metadata_list, 
+                is_prompt=is_prompt)
             self.profiler.record_counter(event_start, counters)
 
         return output
