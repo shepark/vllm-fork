@@ -1030,7 +1030,7 @@ class HabanaProfilerCounterHelper():
         real_max_seq_len = max(real_seq_lens)
         real_num_tokens = sum(real_seq_lens)
         padded_num_tokens = batch_size_padded * seq_len
-        batch_utilization = real_num_tokens / padded_num_tokens
+        batch_token_utilization = real_num_tokens / padded_num_tokens
         if self.average_real_throughput is None:
             self.average_real_throughput = throughput_effective
         else: # https://www.heikohoffmann.de/htmlthesis/node134.html
@@ -1043,7 +1043,7 @@ class HabanaProfilerCounterHelper():
             f'{phase}_seq_len': real_max_seq_len,
             f'{phase}_bucket_gen_throughput': throughput,
             f'{phase}_real_gen_throughput': throughput_effective,
-            f'{phase}_batch_utilization': batch_utilization,
+            f'{phase}_batch_token_utilization': batch_token_utilization,
             'average_real_throughput': self.average_real_throughput,
             'engine_iteration': self.niter,
         }
@@ -1062,9 +1062,11 @@ class HabanaProfilerCounterHelper():
             num_cache_blocks = cache_config.num_gpu_blocks 
             cache_total_num_free_blocks = num_cache_blocks - cache_total_num_blocks_used
             cache_computed_utilization = cache_total_num_blocks_used / (num_cache_blocks - cache_total_num_blocks_used)
+            batch_block_utilization = sum(cache_num_blocks_used) / (batch_size_padded * (seq_len/cache_config.block_size))
             counters['cache_num_blocks_used'] = cache_total_num_blocks_used
             counters['cache_num_free_blocks'] = cache_total_num_free_blocks
             counters['cache_computed_utilization'] = cache_computed_utilization
+            counters[f'{phase}_batch_block_utilization'] = batch_block_utilization
         if not self.logged_once:
             counters['const_cache_num_blocks'] = cache_config.num_gpu_blocks
             counters['const_gpu_memory_utilization'] = cache_config.gpu_memory_utilization
