@@ -1,5 +1,5 @@
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import Counter as CollectionsCounter
 from typing import Dict, List, Optional, Protocol, Union
@@ -9,7 +9,6 @@ from prometheus_client import (REGISTRY, Counter, Gauge, Histogram, Info,
                                disable_created_metrics)
 
 from vllm.logger import init_logger
-from vllm.worker.profiler import Profiler
 
 if TYPE_CHECKING:
     from vllm.spec_decode.metrics import SpecDecodeWorkerMetrics
@@ -207,7 +206,6 @@ class StatLogger:
 
     def __init__(self, local_interval: float, labels: Dict[str, str],
                  max_model_len: int) -> None:
-        self.habana_profiler = Profiler()
         # Metadata for logging locally.
         self.last_local_log = time.time()
         self.local_interval = local_interval
@@ -314,7 +312,6 @@ class StatLogger:
            Logs to Stdout every self.local_interval seconds."""
 
         # Log to prometheus.
-        self.habana_profiler.record_counter(self.habana_profiler.get_timestamp_us(), asdict(stats))
         self._log_prometheus(stats)
 
         # Save tracked stats for token counters.
