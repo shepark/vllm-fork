@@ -853,14 +853,14 @@ class HabanaModelRunner:
 
         htorch.core.mark_step()
         if self.is_driver_worker:
-            model_event_name = f'model_{base_event_name}_eager_bs{real_batch_size}'
+            model_event_name = f"model_{'prompt' if is_prompt else 'decode'}_bs{batch_size}_seq{seq_len}_graphs{'T' if use_graphs else 'F'}"
         else:
             model_event_name = 'model_executable'
         with self.profiler.record_event('internal', model_event_name):
             hidden_states = self.model.forward(**execute_model_kwargs, selected_token_indices=sampling_metadata.selected_token_indices, bypass_hpu_graphs=not use_graphs)
 
         # Compute the logits.
-        with self.profiler.record_event('internal', 'compute_logits'):
+        with self.profiler.record_event('internal', f'compute_logits_{"prompt" if is_prompt else "decode"}_bs{batch_size}_seq{seq_len}'):
             sampling_metadata.selected_token_indices = None
             logits = self.model.compute_logits(hidden_states, sampling_metadata)
         htorch.core.mark_step()
@@ -870,7 +870,7 @@ class HabanaModelRunner:
             return None
 
         # Sample the next token.
-        with self.profiler.record_event('internal', 'sample'):
+        with self.profiler.record_event('internal', f'sample_{"prompt" if is_prompt else "decode"}_bs{batch_size}_seq{seq_len}'):
             output = self.model.sample(
                 logits=logits,
                 sampling_metadata=sampling_metadata,
@@ -921,8 +921,10 @@ class HabanaModelRunner:
     def profile_run(self) -> None:
         num_layers = self.model_config.get_num_layers(self.parallel_config)
         kv_caches = [None] * num_layers
-        seq_len = self.max_model_len // self.max_num_seqs
-        self.warmup_scenario(self.max_num_seqs, seq_len, True, kv_caches)
+        max_batch_size = self.prompt_bs_bucket_cfg[-1]
+        max_seq_len = self.prompt_seq_bucket_cfg[-1]
+
+        self.warmup_scenario(max_batch_size, max_seq_len, True, kv_caches)
 
     def warmup_scenario(self, batch_size, seq_len, is_prompt, kv_caches) -> None:
         use_graphs = self._use_graphs(batch_size, seq_len, is_prompt)
@@ -978,8 +980,7 @@ class HabanaModelRunner:
             total_batch_seq += batch_seq
         graphed = list(c[:2] for c in self.graphed_buckets if c[2] == is_prompt)
         logger.info(f'{phase} captured:{len(graphed)} ({100 * len(graphed) / num_candidates:.1f}%) used_mem:{format_bytes(total_mem)} buckets:{sorted(list(graphed))}')
-        
-        
+
     @torch.inference_mode()
     def warmup_model(self, kv_caches: List[torch.Tensor]) -> None:
         if os.environ.get('VLLM_SKIP_WARMUP', 'false').lower() == 'true':
