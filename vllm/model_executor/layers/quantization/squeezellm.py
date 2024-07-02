@@ -39,8 +39,7 @@ class SqueezeLLMConfig(QuantizationConfig):
     def get_supported_act_dtypes(self) -> List[torch.dtype]:
         return [torch.half]
 
-    @classmethod
-    def get_min_capability(cls) -> int:
+    def get_min_capability(self) -> int:
         return 70
 
     @staticmethod

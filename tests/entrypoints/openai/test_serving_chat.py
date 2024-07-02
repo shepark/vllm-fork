@@ -14,22 +14,17 @@ class MockModelConfig:
     tokenizer_mode = "auto"
     max_model_len = 100
     tokenizer_revision = None
-    embedding_mode = False
 
 
 @dataclass
 class MockEngine:
 
     async def get_model_config(self):
-        return MockModelConfig()
+        return MockModelConfig
 
 
 async def _async_serving_chat_init():
-    engine = MockEngine()
-    model_config = await engine.get_model_config()
-
-    serving_completion = OpenAIServingChat(engine,
-                                           model_config,
+    serving_completion = OpenAIServingChat(MockEngine(),
                                            served_model_names=[MODEL_NAME],
                                            response_role="assistant",
                                            chat_template=CHAT_TEMPLATE)

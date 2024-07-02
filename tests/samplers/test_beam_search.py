@@ -2,8 +2,11 @@
 
 Run `pytest tests/samplers/test_beam_search.py`.
 """
+import gc
 
 import pytest
+import torch
+from vllm.utils import is_hpu
 
 # FIXME(zhuohan): The test can not pass if we:
 #   1. Increase max_tokens to 256.
@@ -14,6 +17,7 @@ BEAM_WIDTHS = [4]
 MODELS = ["facebook/opt-125m"]
 
 
+@pytest.mark.skipif(is_hpu(), reason="Skipping test on HPU")
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["half"])
 @pytest.mark.parametrize("max_tokens", MAX_TOKENS)
@@ -28,13 +32,19 @@ def test_beam_search_single_input(
     beam_width: int,
 ) -> None:
     example_prompts = example_prompts[:1]
-    with hf_runner(model, dtype=dtype) as hf_model:
-        hf_outputs = hf_model.generate_beam_search(example_prompts, beam_width,
-                                                   max_tokens)
+    hf_model = hf_runner(model, dtype=dtype)
+    hf_outputs = hf_model.generate_beam_search(example_prompts, beam_width,
+                                               max_tokens)
+    del hf_model
 
-    with vllm_runner(model, dtype=dtype) as vllm_model:
-        vllm_outputs = vllm_model.generate_beam_search(example_prompts,
-                                                       beam_width, max_tokens)
+    vllm_model = vllm_runner(model, dtype=dtype)
+    vllm_outputs = vllm_model.generate_beam_search(example_prompts, beam_width,
+                                                   max_tokens)
+    del vllm_model
+    # NOTE(woosuk): For some reason, the following GC is required to avoid
+    # GPU OOM errors in the following tests using `vllm_runner`.
+    gc.collect()
+    torch.cuda.empty_cache()
 
     for i in range(len(example_prompts)):
         hf_output_ids, _ = hf_outputs[i]

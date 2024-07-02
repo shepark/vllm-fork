@@ -8,6 +8,7 @@ from transformers import AutoModelForCausalLM
 
 import vllm
 from vllm.lora.request import LoRARequest
+from vllm.utils import is_hpu
 
 from .conftest import cleanup
 
@@ -26,7 +27,7 @@ def get_lora_model(model_id: str, target_modules: List[str], rank: int):
     return lora_model
 
 
-def do_sample(llm: vllm.LLM,
+def do_sample(llm,
               lora_path: Optional[str] = None,
               lora_id: Optional[int] = None,
               logprobs: int = 0,
@@ -42,8 +43,8 @@ def do_sample(llm: vllm.LLM,
         lora_request=LoRARequest(str(lora_id), lora_id, lora_path)
         if lora_id else None)
     # Print the outputs.
-    generated_texts: List[str] = []
-    generated_logprobs: List[List[List[int]]] = []
+    generated_texts = []
+    generated_logprobs = []
     for output in outputs:
         prompt = output.prompt
         generated_text = output.outputs[0].text
@@ -70,6 +71,7 @@ for length in range(2, 6):
 # step 1: init a base model and serve with LoRA to get the reference results
 # step 2: merge the same LoRA to the base model, serve the merged model
 # step 3: compare the results from step 1 and step 2
+@pytest.mark.skipif(is_hpu(), reason="Skipping test on HPU")
 @pytest.mark.parametrize("tp_size", [1])
 @pytest.mark.parametrize("target_modules", TARGET_MODULES_LIST)
 @pytest.mark.parametrize("rank", [8, 16, 32, 64])

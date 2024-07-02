@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -19,7 +18,6 @@ class LoRARequest:
     lora_name: str
     lora_int_id: int
     lora_local_path: str
-    long_lora_max_len: Optional[int] = None
 
     def __post_init__(self):
         if self.lora_int_id < 1:

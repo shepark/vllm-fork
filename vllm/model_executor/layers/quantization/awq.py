@@ -43,8 +43,7 @@ class AWQConfig(QuantizationConfig):
     def get_supported_act_dtypes(self) -> List[torch.dtype]:
         return [torch.half]
 
-    @classmethod
-    def get_min_capability(cls) -> int:
+    def get_min_capability(self) -> int:
         # The AWQ kernel only supports Turing or newer GPUs.
         return 75
 

@@ -11,7 +11,6 @@ from torch import nn
 from transformers import PretrainedConfig
 
 from vllm.attention import Attention, AttentionMetadata
-from vllm.config import CacheConfig
 from vllm.distributed import get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.activation import SiluAndMul
 from vllm.model_executor.layers.linear import (MergedColumnParallelLinear,
@@ -69,7 +68,6 @@ class OrionAttention(nn.Module):
         rope_theta: float = 10000,
         rope_scaling: Optional[Dict[str, Any]] = None,
         max_position_embeddings: int = 8192,
-        cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
     ) -> None:
         super().__init__()
@@ -120,9 +118,7 @@ class OrionAttention(nn.Module):
         self.attn = Attention(self.num_heads,
                               self.head_dim,
                               self.scaling,
-                              num_kv_heads=self.num_kv_heads,
-                              cache_config=cache_config,
-                              quant_config=quant_config)
+                              num_kv_heads=self.num_kv_heads)
 
     def forward(
         self,
@@ -144,7 +140,6 @@ class OrionDecoderLayer(nn.Module):
     def __init__(
         self,
         config: PretrainedConfig,
-        cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
     ) -> None:
         super().__init__()
@@ -160,7 +155,6 @@ class OrionDecoderLayer(nn.Module):
             rope_theta=rope_theta,
             rope_scaling=rope_scaling,
             max_position_embeddings=max_position_embeddings,
-            cache_config=cache_config,
             quant_config=quant_config,
         )
         self.mlp = OrionMLP(
@@ -208,7 +202,6 @@ class OrionModel(nn.Module):
     def __init__(
         self,
         config: PretrainedConfig,
-        cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
     ) -> None:
         super().__init__()
@@ -220,7 +213,7 @@ class OrionModel(nn.Module):
             config.hidden_size,
         )
         self.layers = nn.ModuleList([
-            OrionDecoderLayer(config, cache_config, quant_config)
+            OrionDecoderLayer(config, quant_config)
             for _ in range(config.num_hidden_layers)
         ])
         self.norm = nn.LayerNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -252,13 +245,12 @@ class OrionForCausalLM(nn.Module):
     def __init__(
         self,
         config: PretrainedConfig,
-        cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
     ) -> None:
         super().__init__()
         self.config = config
         self.quant_config = quant_config
-        self.model = OrionModel(config, cache_config, quant_config)
+        self.model = OrionModel(config, quant_config)
         self.lm_head = ParallelLMHead(config.vocab_size, config.hidden_size)
         self.logits_processor = LogitsProcessor(config.vocab_size)
         self.sampler = Sampler()

@@ -16,7 +16,6 @@ import requests
 import torch
 
 import vllm.envs as envs
-from vllm.version import __version__ as VLLM_VERSION
 
 _config_home = envs.VLLM_CONFIG_ROOT
 _USAGE_STATS_JSON_PATH = os.path.join(_config_home, "vllm/usage_stats.json")
@@ -91,7 +90,6 @@ class UsageContext(str, Enum):
     LLM_CLASS = "LLM_CLASS"
     API_SERVER = "API_SERVER"
     OPENAI_API_SERVER = "OPENAI_API_SERVER"
-    OPENAI_BATCH_RUNNER = "OPENAI_BATCH_RUNNER"
     ENGINE_CONTEXT = "ENGINE_CONTEXT"
 
 
@@ -164,8 +162,9 @@ class UsageMessage:
         ])
 
         # vLLM information
+        import vllm  # delayed import to prevent circular import
         self.context = usage_context.value
-        self.vllm_version = VLLM_VERSION
+        self.vllm_version = vllm.__version__
         self.model_architecture = model_architecture
 
         # Metadata

@@ -1,7 +1,5 @@
 from itertools import count
-from typing import Callable, Dict, List, Optional
-from typing import Sequence as GenericSequence
-from typing import TypeVar, Union
+from typing import Dict, Iterable, List, Optional, Union
 from unittest.mock import MagicMock
 
 import torch
@@ -9,15 +7,12 @@ import torch
 from vllm.engine.arg_utils import EngineArgs
 from vllm.model_executor.utils import set_random_seed
 from vllm.sampling_params import SamplingParams
-from vllm.sequence import (CompletionSequenceGroupOutput, Logprob,
-                           SamplerOutput, SequenceData, SequenceGroupMetadata,
+from vllm.sequence import (Logprob, SamplerOutput, SequenceData,
+                           SequenceGroupMetadata, SequenceGroupOutput,
                            SequenceOutput)
 from vllm.utils import get_distributed_init_method, get_ip, get_open_port
 from vllm.worker.cache_engine import CacheEngine
-from vllm.worker.model_runner import ModelRunner
 from vllm.worker.worker import Worker
-
-T = TypeVar("T", bound=Worker)
 
 
 def round_up_to_next_block(seq_len: int, block_size: int) -> int:
@@ -61,14 +56,13 @@ def zero_kv_cache(cache_engine: CacheEngine):
         value_blocks.zero_()
 
 
-def create_worker(cls: Callable[..., T],
+def create_worker(cls: type,
                   model_name: str,
                   block_size: int,
                   num_gpu_blocks: int,
                   seed: int,
                   is_driver_worker: bool = True,
-                  enforce_eager: bool = True,
-                  model_runner_cls: Optional[ModelRunner] = None) -> T:
+                  enforce_eager: bool = True):
     engine_args = EngineArgs(
         model=model_name,
         seed=seed,
@@ -91,7 +85,6 @@ def create_worker(cls: Callable[..., T],
         rank=0,
         distributed_init_method=distributed_init_method,
         is_driver_worker=is_driver_worker,
-        model_runner_cls=model_runner_cls,
     )
 
     worker.init_device()
@@ -166,8 +159,8 @@ def assert_logprobs_dict_allclose(
 
 def create_sampler_output_list(
         token_ids: torch.Tensor,
-        probs: GenericSequence[Optional[torch.Tensor]],
-        logprobs: GenericSequence[Optional[torch.Tensor]],
+        probs: Iterable[Optional[torch.Tensor]],
+        logprobs: Iterable[Optional[torch.Tensor]],
         seq_ids: Optional[List[int]] = None) -> List[SamplerOutput]:
     num_steps, batch_size = token_ids.shape
     token_ids_by_step = token_ids.tolist()
@@ -177,7 +170,7 @@ def create_sampler_output_list(
 
     return [
         SamplerOutput(outputs=[
-            CompletionSequenceGroupOutput(
+            SequenceGroupOutput(
                 samples=[
                     SequenceOutput(
                         output_token=token_id,

@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import torch
 from torch import nn
@@ -11,39 +10,11 @@ from vllm.model_executor import SamplingMetadata
 from vllm.model_executor.model_loader.neuron import get_neuron_model
 from vllm.sequence import SamplerOutput, SequenceGroupMetadata
 from vllm.utils import is_pin_memory_available, make_tensor_with_pad
-from vllm.worker.model_runner_base import ModelRunnerBase, ModelRunnerInputBase
-
-if TYPE_CHECKING:
-    from vllm.attention.backends.abstract import AttentionBackend
 
 logger = init_logger(__name__)
 
 
-@dataclass(frozen=True)
-class ModelInputForNeuron(ModelRunnerInputBase):
-    """
-    Used by the NeuronModelRunner.
-    """
-    input_tokens: Optional[torch.Tensor] = None
-    input_positions: Optional[torch.Tensor] = None
-    input_block_ids: Optional[torch.Tensor] = None
-    sampling_metadata: Optional["SamplingMetadata"] = None
-
-    def as_broadcastable_tensor_dict(
-            self) -> Dict[str, Union[int, torch.Tensor]]:
-        raise NotImplementedError("ModelInputForNeuron cannot be broadcast.")
-
-    @classmethod
-    def from_broadcasted_tensor_dict(
-        cls,
-        tensor_dict: Dict[str, Any],
-        attn_backend: Optional["AttentionBackend"] = None,
-    ) -> "ModelInputForNeuron":
-        assert attn_backend is None
-        return cls.from_broadcasted_tensor_dict(tensor_dict)
-
-
-class NeuronModelRunner(ModelRunnerBase[ModelInputForNeuron]):
+class NeuronModelRunner:
 
     def __init__(
         self,
@@ -168,14 +139,10 @@ class NeuronModelRunner(ModelRunnerBase[ModelInputForNeuron]):
 
         return input_tokens, input_positions, input_block_ids
 
-    def make_model_input_from_broadcasted_tensor_dict(
-            self, tensor_dict: Dict[str, Any]) -> ModelInputForNeuron:
-        return ModelInputForNeuron.from_broadcasted_tensor_dict(tensor_dict)
-
-    def prepare_model_input(
+    def prepare_input_tensors(
         self,
         seq_group_metadata_list: List[SequenceGroupMetadata],
-    ) -> ModelInputForNeuron:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, SamplingMetadata]:
         # NOTE: We assume that all sequences in the group are all prompts or
         # all decodes.
         is_prompt = seq_group_metadata_list[0].is_prompt
@@ -197,38 +164,32 @@ class NeuronModelRunner(ModelRunnerBase[ModelInputForNeuron]):
             self.device,
             self.pin_memory)
 
-        return ModelInputForNeuron(input_tokens=input_tokens,
-                                   input_positions=input_positions,
-                                   input_block_ids=input_block_ids,
-                                   sampling_metadata=sampling_metadata)
+        return (input_tokens, input_positions, input_block_ids,
+                sampling_metadata)
 
     @torch.inference_mode()
     def execute_model(
         self,
-        model_input: ModelInputForNeuron,
-        kv_caches: Optional[List[torch.Tensor]] = None,
-        num_steps: int = 1,
-    ) -> Optional[List[SamplerOutput]]:
-        if num_steps > 1:
-            raise ValueError(
-                "NeuronModelRunner does not support multi-step execution.")
+        seq_group_metadata_list: List[SequenceGroupMetadata],
+    ) -> Optional[SamplerOutput]:
+        (input_tokens, input_positions, input_block_ids, sampling_metadata
+         ) = self.prepare_input_tensors(seq_group_metadata_list)
 
         hidden_states = self.model(
-            input_ids=model_input.input_tokens,
-            positions=model_input.input_positions,
-            input_block_ids=model_input.input_block_ids,
+            input_ids=input_tokens,
+            positions=input_positions,
+            input_block_ids=input_block_ids,
         )
 
         # Compute the logits.
-        logits = self.model.compute_logits(hidden_states,
-                                           model_input.sampling_metadata)
+        logits = self.model.compute_logits(hidden_states, sampling_metadata)
 
         # Sample the next token.
         output = self.model.sample(
             logits=logits,
-            sampling_metadata=model_input.sampling_metadata,
+            sampling_metadata=sampling_metadata,
         )
-        return [output]
+        return output
 
     @property
     def vocab_size(self) -> int:

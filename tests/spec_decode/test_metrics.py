@@ -5,37 +5,40 @@ import pytest
 import torch
 
 from vllm.spec_decode.metrics import AsyncMetricsCollector
+from vllm.utils import is_hpu
 
 
+@pytest.mark.skipif(is_hpu(), reason="Skipping test on HPU")
 def test_initial_call_returns_none():
     """Expect first call to get metrics to return None.
     """
-    spec_decode_sampler = MagicMock()
-    spec_decode_sampler.num_accepted_tokens = torch.tensor(0,
-                                                           dtype=torch.long,
-                                                           device='cuda')
-    spec_decode_sampler.num_emitted_tokens = torch.tensor(0,
-                                                          dtype=torch.long,
-                                                          device='cuda')
-    spec_decode_sampler.num_draft_tokens = 0
+    rej_sampler = MagicMock()
+    rej_sampler.num_accepted_tokens = torch.tensor(0,
+                                                   dtype=torch.long,
+                                                   device='cuda')
+    rej_sampler.num_emitted_tokens = torch.tensor(0,
+                                                  dtype=torch.long,
+                                                  device='cuda')
+    rej_sampler.num_draft_tokens = 0
 
-    collector = AsyncMetricsCollector(spec_decode_sampler)
+    collector = AsyncMetricsCollector(rej_sampler)
     collector.init_gpu_tensors(rank=0)
     maybe_metrics = collector.maybe_collect_rejsample_metrics(k=5)
     assert maybe_metrics is None
 
 
+@pytest.mark.skipif(is_hpu(), reason="Skipping test on HPU")
 def test_second_call_returns_metrics():
     """Expect second call to not return None.
     """
-    spec_decode_sampler = MagicMock()
-    spec_decode_sampler.num_accepted_tokens = torch.tensor(0,
-                                                           dtype=torch.long,
-                                                           device='cuda')
-    spec_decode_sampler.num_emitted_tokens = torch.tensor(0,
-                                                          dtype=torch.long,
-                                                          device='cuda')
-    spec_decode_sampler.num_draft_tokens = 0
+    rej_sampler = MagicMock()
+    rej_sampler.num_accepted_tokens = torch.tensor(0,
+                                                   dtype=torch.long,
+                                                   device='cuda')
+    rej_sampler.num_emitted_tokens = torch.tensor(0,
+                                                  dtype=torch.long,
+                                                  device='cuda')
+    rej_sampler.num_draft_tokens = 0
 
     collect_interval_s = 5.0
     timer = MagicMock()
@@ -43,7 +46,7 @@ def test_second_call_returns_metrics():
         0.0, collect_interval_s + 0.1, collect_interval_s + 0.2
     ]
 
-    collector = AsyncMetricsCollector(spec_decode_sampler=spec_decode_sampler,
+    collector = AsyncMetricsCollector(rejection_sampler=rej_sampler,
                                       timer=timer,
                                       collect_interval_s=collect_interval_s)
     collector.init_gpu_tensors(rank=0)
@@ -52,37 +55,39 @@ def test_second_call_returns_metrics():
     assert metrics is not None
 
 
+@pytest.mark.skipif(is_hpu(), reason="Skipping test on HPU")
 @pytest.mark.parametrize("rank", [1, 2, 3, 4])
 def test_nonzero_rank_noop(rank):
     """Verify nonzero ranks don't collect metrics.
     """
-    spec_decode_sampler = MagicMock()
-    spec_decode_sampler.num_accepted_tokens = torch.tensor(0,
-                                                           dtype=torch.long,
-                                                           device='cuda')
-    spec_decode_sampler.num_emitted_tokens = torch.tensor(0,
-                                                          dtype=torch.long,
-                                                          device='cuda')
-    spec_decode_sampler.num_draft_tokens = 0
+    rej_sampler = MagicMock()
+    rej_sampler.num_accepted_tokens = torch.tensor(0,
+                                                   dtype=torch.long,
+                                                   device='cuda')
+    rej_sampler.num_emitted_tokens = torch.tensor(0,
+                                                  dtype=torch.long,
+                                                  device='cuda')
+    rej_sampler.num_draft_tokens = 0
 
-    collector = AsyncMetricsCollector(spec_decode_sampler)
+    collector = AsyncMetricsCollector(rej_sampler)
     collector.init_gpu_tensors(rank=rank)
     _ = collector.maybe_collect_rejsample_metrics(k=5)
     metrics = collector.maybe_collect_rejsample_metrics(k=5)
     assert metrics is None
 
 
+@pytest.mark.skipif(is_hpu(), reason="Skipping test on HPU")
 def test_noop_until_time():
     """Verify metrics aren't collected until enough time passes.
     """
-    spec_decode_sampler = MagicMock()
-    spec_decode_sampler.num_accepted_tokens = torch.tensor(0,
-                                                           dtype=torch.long,
-                                                           device='cuda')
-    spec_decode_sampler.num_emitted_tokens = torch.tensor(0,
-                                                          dtype=torch.long,
-                                                          device='cuda')
-    spec_decode_sampler.num_draft_tokens = 0
+    rej_sampler = MagicMock()
+    rej_sampler.num_accepted_tokens = torch.tensor(0,
+                                                   dtype=torch.long,
+                                                   device='cuda')
+    rej_sampler.num_emitted_tokens = torch.tensor(0,
+                                                  dtype=torch.long,
+                                                  device='cuda')
+    rej_sampler.num_draft_tokens = 0
 
     collect_interval_s = 5.0
     timer = MagicMock()
@@ -91,7 +96,7 @@ def test_noop_until_time():
         collect_interval_s + 0.1, collect_interval_s + 0.1
     ]
 
-    collector = AsyncMetricsCollector(spec_decode_sampler=spec_decode_sampler,
+    collector = AsyncMetricsCollector(rejection_sampler=rej_sampler,
                                       timer=timer,
                                       collect_interval_s=collect_interval_s)
     collector.init_gpu_tensors(rank=0)
@@ -105,6 +110,7 @@ def test_noop_until_time():
     assert metrics is not None
 
 
+@pytest.mark.skipif(is_hpu(), reason="Skipping test on HPU")
 @pytest.mark.parametrize("has_data", [True, False])
 def test_initial_metrics_has_correct_values(has_data: bool):
     """Test correctness of metrics data.
@@ -122,14 +128,14 @@ def test_initial_metrics_has_correct_values(has_data: bool):
     max_num_emitted_tokens = AsyncMetricsCollector.get_max_num_emitted_tokens(
         num_draft_tokens, k)
 
-    spec_decode_sampler = MagicMock()
-    spec_decode_sampler.num_accepted_tokens = torch.tensor(num_accepted_tokens,
-                                                           dtype=torch.long,
-                                                           device='cuda')
-    spec_decode_sampler.num_emitted_tokens = torch.tensor(num_emitted_tokens,
-                                                          dtype=torch.long,
-                                                          device='cuda')
-    spec_decode_sampler.num_draft_tokens = num_draft_tokens
+    rej_sampler = MagicMock()
+    rej_sampler.num_accepted_tokens = torch.tensor(num_accepted_tokens,
+                                                   dtype=torch.long,
+                                                   device='cuda')
+    rej_sampler.num_emitted_tokens = torch.tensor(num_emitted_tokens,
+                                                  dtype=torch.long,
+                                                  device='cuda')
+    rej_sampler.num_draft_tokens = num_draft_tokens
 
     collect_interval_s = 5.0
     timer = MagicMock()
@@ -137,7 +143,7 @@ def test_initial_metrics_has_correct_values(has_data: bool):
         0.0, collect_interval_s + 0.1, collect_interval_s + 0.2
     ]
 
-    collector = AsyncMetricsCollector(spec_decode_sampler=spec_decode_sampler,
+    collector = AsyncMetricsCollector(rejection_sampler=rej_sampler,
                                       timer=timer,
                                       collect_interval_s=collect_interval_s)
     collector.init_gpu_tensors(rank=0)

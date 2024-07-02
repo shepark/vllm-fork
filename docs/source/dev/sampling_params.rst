@@ -1,5 +1,5 @@
-Sampling Parameters
-===================
+Sampling Params
+===============
 
 .. autoclass:: vllm.SamplingParams
     :members:

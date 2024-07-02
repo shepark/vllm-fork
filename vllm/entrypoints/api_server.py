@@ -6,6 +6,7 @@ We are also not going to accept PRs modifying this file, please
 change `vllm/entrypoints/openai/api_server.py` instead.
 """
 
+import argparse
 import json
 import ssl
 from typing import AsyncGenerator
@@ -18,7 +19,7 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.engine.async_llm_engine import AsyncLLMEngine
 from vllm.sampling_params import SamplingParams
 from vllm.usage.usage_lib import UsageContext
-from vllm.utils import FlexibleArgumentParser, random_uuid
+from vllm.utils import random_uuid
 
 TIMEOUT_KEEP_ALIVE = 5  # seconds.
 app = FastAPI()
@@ -79,7 +80,7 @@ async def generate(request: Request) -> Response:
 
 
 if __name__ == "__main__":
-    parser = FlexibleArgumentParser()
+    parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default=None)
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--ssl-keyfile", type=str, default=None)

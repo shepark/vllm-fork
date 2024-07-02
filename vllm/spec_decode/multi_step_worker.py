@@ -1,20 +1,16 @@
 import copy
-import weakref
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import torch
 
-from vllm.sequence import (ExecuteModelRequest, SamplerOutput, SequenceData,
+from vllm.sequence import (ExecuteModelRequest, SamplerOutput,
                            SequenceGroupMetadata)
-from vllm.spec_decode.draft_model_runner import TP1DraftModelRunner
-from vllm.spec_decode.interfaces import (SpeculativeProposals,
-                                         SpeculativeProposer)
-from vllm.spec_decode.proposer_worker_base import ProposerWorkerBase
+from vllm.spec_decode.interfaces import SpeculativeProposals
 from vllm.spec_decode.top1_proposer import Top1Proposer
 from vllm.worker.worker import Worker
 
 
-class MultiStepWorker(Worker, ProposerWorkerBase):
+class MultiStepWorker(Worker):
     """The MultiStepWorker is equivalent to a Worker except that it allows
     multiple forward passes in a single call, assuming the scheduler has
     allocated enough space to store the additional KV. This reduces overhead
@@ -30,19 +26,19 @@ class MultiStepWorker(Worker, ProposerWorkerBase):
         super().__init__(*args, **kwargs)
 
         # Lazy initialization list.
-        self._proposer: SpeculativeProposer
+        self._proposer: Top1Proposer
 
-    def init_device(self) -> None:
+    def init_device(self):
         super().init_device()
 
         self._proposer = Top1Proposer(
-            weakref.proxy(self),  # type: ignore[arg-type]
+            self,
             self.device,
             self.vocab_size,
             max_proposal_len=self.max_model_len,
         )
 
-    def set_include_gpu_probs_tensor(self) -> None:
+    def set_include_gpu_probs_tensor(self):
         # Need include_gpu_probs_tensor for multi_step_worker
         self.model_runner.model.sampler.include_gpu_probs_tensor = True
 
@@ -68,24 +64,22 @@ class MultiStepWorker(Worker, ProposerWorkerBase):
         copied_execute_model_req = execute_model_req.clone(
             copied_seq_group_metadata_list)
 
-        # Run model sample_len times.
-        model_outputs: List[SamplerOutput] = []
-        if isinstance(self.model_runner, TP1DraftModelRunner):
-            copied_execute_model_req.num_steps = sample_len
-            model_outputs = self.execute_model(
-                execute_model_req=copied_execute_model_req)
-        else:
-            # TODO: Remove this branch once DraftModelRunner supports TP>1.
-            for _ in range(sample_len):
-                model_output: List[SamplerOutput] = super().execute_model(
-                    execute_model_req=copied_execute_model_req)
-                assert (len(model_output) == 1
-                        ), "composing multistep workers not supported"
-                model_output = model_output[0]
+        # Assert enough KV space for sample_len tokens per sequence.
+        self._assert_enough_kv_space(execute_model_req.seq_group_metadata_list,
+                                     sample_len)
 
-                self._append_new_tokens(model_output,
-                                        copied_seq_group_metadata_list)
-                model_outputs.append(model_output)
+        # Run model sample_len times.
+        model_outputs = []
+        for _ in range(sample_len):
+            model_output = super().execute_model(
+                execute_model_req=copied_execute_model_req)
+            assert (len(model_output) == 1
+                    ), "composing multistep workers not supported"
+            model_output = model_output[0]
+
+            self._append_new_tokens(model_output,
+                                    copied_seq_group_metadata_list)
+            model_outputs.append(model_output)
 
         return model_outputs, True
 
@@ -97,12 +91,11 @@ class MultiStepWorker(Worker, ProposerWorkerBase):
         speculative tokens per sequence is determined by max_proposal_len.
         """
 
-        return self._proposer.get_spec_proposals(execute_model_req)
+        return self._proposer.get_proposals(execute_model_req)
 
-    @staticmethod
     def _append_new_tokens(
-            model_output: List[SamplerOutput],
-            seq_group_metadata_list: List[SequenceGroupMetadata]) -> None:
+            self, model_output: SamplerOutput,
+            seq_group_metadata_list: SequenceGroupMetadata) -> None:
         """Given model output from a single run, append the tokens to the
         sequences. This is normally done outside of the worker, but it is
         required if the worker is to perform multiple forward passes.
@@ -120,11 +113,9 @@ class MultiStepWorker(Worker, ProposerWorkerBase):
                 token_logprob = seq_output.logprobs[token_id]
 
                 seq.append_token_id(token_id, token_logprob.logprob)
-                seq.update_num_computed_tokens(1)
 
-    @staticmethod
     def _shallow_copy_inputs(
-        seq_group_metadata_list: List[SequenceGroupMetadata]
+        self, seq_group_metadata_list: List[SequenceGroupMetadata]
     ) -> List[SequenceGroupMetadata]:
         """Copy input data structures to remove side-effects when input data
         structures are shared with other modules.
@@ -136,7 +127,7 @@ class MultiStepWorker(Worker, ProposerWorkerBase):
 
         # Shallow-copy the list of SequenceGroupMetadata. This allows us to
         # append tokens and change is_prompt without external side-effects.
-        new_seq_group_metadata_list: List[SequenceGroupMetadata] = []
+        new_seq_group_metadata_list = []
 
         for old_seq_group_metadata in seq_group_metadata_list:
             # We must shallow-copy seq_group_metadata as is_prompt could change.
@@ -144,7 +135,7 @@ class MultiStepWorker(Worker, ProposerWorkerBase):
             new_seq_group_metadata_list.append(seq_group_metadata)
 
             # We must shallow-copy seq_data as we will append token ids
-            new_seq_data: Dict[int, SequenceData] = {}
+            new_seq_data = {}
             for seq_id, old_seq_data in seq_group_metadata.seq_data.items():
                 new_seq_data[seq_id] = copy.copy(old_seq_data)
                 new_seq_data[

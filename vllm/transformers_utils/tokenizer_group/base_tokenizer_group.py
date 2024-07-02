@@ -53,7 +53,3 @@ class BaseTokenizerGroup(ABC):
     ) -> "PreTrainedTokenizer":
         """Get a tokenizer for a LoRA request."""
         pass
-
-    def check_health(self):
-        """Raise exception if the tokenizer group is unhealthy."""
-        return

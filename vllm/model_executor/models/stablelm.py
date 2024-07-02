@@ -26,7 +26,6 @@ from torch import nn
 from transformers import PretrainedConfig
 
 from vllm.attention import Attention, AttentionMetadata
-from vllm.config import CacheConfig
 from vllm.distributed import get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.activation import SiluAndMul
 from vllm.model_executor.layers.linear import (MergedColumnParallelLinear,
@@ -73,7 +72,6 @@ class StablelmAttention(nn.Module):
 
     def __init__(self,
                  config: PretrainedConfig,
-                 cache_config: Optional[CacheConfig] = None,
                  quant_config: Optional[QuantizationConfig] = None) -> None:
         super().__init__()
         self.config = config
@@ -126,9 +124,7 @@ class StablelmAttention(nn.Module):
         self.attn = Attention(self.num_heads,
                               self.head_dim,
                               self.scaling,
-                              num_kv_heads=self.num_key_value_heads,
-                              cache_config=cache_config,
-                              quant_config=quant_config)
+                              num_kv_heads=self.num_key_value_heads)
 
     def forward(
         self,
@@ -150,11 +146,10 @@ class StablelmDecoderLayer(nn.Module):
     def __init__(
         self,
         config: PretrainedConfig,
-        cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
     ) -> None:
         super().__init__()
-        self.self_attn = StablelmAttention(config, cache_config, quant_config)
+        self.self_attn = StablelmAttention(config)
         self.mlp = StablelmMLP(config, quant_config)
         norm_eps = getattr(config, "norm_eps",
                            getattr(config, "layer_norm_eps", 1e-05))
@@ -193,7 +188,6 @@ class StableLMEpochModel(nn.Module):
 
     def __init__(self,
                  config: PretrainedConfig,
-                 cache_config: Optional[CacheConfig] = None,
                  quant_config: Optional[QuantizationConfig] = None) -> None:
         super().__init__()
         self.embed_tokens = VocabParallelEmbedding(
@@ -201,7 +195,7 @@ class StableLMEpochModel(nn.Module):
             config.hidden_size,
         )
         self.layers = nn.ModuleList([
-            StablelmDecoderLayer(config, cache_config, quant_config)
+            StablelmDecoderLayer(config, quant_config)
             for _ in range(config.num_hidden_layers)
         ])
         norm_eps = getattr(config, "norm_eps",
@@ -233,13 +227,12 @@ class StablelmForCausalLM(nn.Module):
     def __init__(
         self,
         config: PretrainedConfig,
-        cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
     ) -> None:
         super().__init__()
         self.config = config
         self.quant_config = quant_config
-        self.model = StableLMEpochModel(config, cache_config, quant_config)
+        self.model = StableLMEpochModel(config, quant_config)
         self.lm_head = ParallelLMHead(config.vocab_size, config.hidden_size)
         self.logits_processor = LogitsProcessor(config.vocab_size)
         self.sampler = Sampler()
