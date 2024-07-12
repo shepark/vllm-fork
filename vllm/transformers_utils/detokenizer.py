@@ -152,7 +152,7 @@ class Detokenizer:
         seq.tokens.extend(new_tokens)
         seq.prefix_offset = prefix_offset
         seq.read_offset = read_offset
-        seq.output_text += new_decoded_token_text
+        seq.output_text = f'{seq.output_text}{new_decoded_token_text}'
 
         return len(new_decoded_token_text)
 
