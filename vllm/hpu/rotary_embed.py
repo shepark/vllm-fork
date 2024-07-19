@@ -8,6 +8,8 @@
 import torch
 import torch.nn as nn
 import habana_frameworks.torch.utils.experimental as htexp
+import torch.nn as nn
+import os
 
 def get_device_type():
     return htexp._get_device_type()
@@ -21,15 +23,21 @@ def is_gaudi2():
 def is_gaudi3():
     return get_device_type() == htexp.synDeviceType.synDeviceGaudi3
 
+VLLM_FUSED_ROPE = os.environ.get('VLLM_FUSED_ROPE', '0') == '1'
+
 # TODO: remove this workaround when FusedRoPE properly works on Gaudi
-if not is_gaudi1() and (is_gaudi2() or is_gaudi3()):
+if VLLM_FUSED_ROPE and not is_gaudi1() and (is_gaudi2() or is_gaudi3()):
     try:
         from habana_frameworks.torch.hpex.kernels import RotaryPosEmbeddingHelperV1 as FusedRoPE
     except ImportError:
-        print("Not using HPU fused kernel for apply_rotary_pos_emb")
         FusedRoPE = None
 else:
     FusedRoPE = None
+
+if FusedRoPE is None:
+        print("Not using HPU fused kernel for apply_rotary_pos_emb")
+else:
+        print("Using HPU fused kernel for apply_rotary_pos_emb")
 
 
 def rotate_half(x):
@@ -59,8 +67,8 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
     Returns:
         `tuple(torch.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
     """
-    cos = cos[position_ids]#.unsqueeze(unsqueeze_dim)
-    sin = sin[position_ids]#.unsqueeze(unsqueeze_dim)
+    cos = cos[position_ids].unsqueeze(-2)
+    sin = sin[position_ids].unsqueeze(-2)
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
