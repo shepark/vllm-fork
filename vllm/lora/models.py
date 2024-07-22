@@ -93,7 +93,7 @@ def convert_mapping(
     long_lora_offsets: Optional[torch.Tensor] = None
     if long_lora_context:
         long_lora_offsets = torch.zeros(len(index_mapping_indices),
-                                        device="cuda",
+                                        device="hpu",
                                         dtype=torch.long)
     prompt_mapping: List[int] = [
         lora_index_to_id.index(x) if x > 0 else -1
@@ -118,9 +118,9 @@ def convert_mapping(
     if long_lora_context:
         assert long_lora_offsets is not None
         indices_list.append(long_lora_offsets)
-    indices = torch.tensor(indices_list, dtype=torch.long, device="cuda")
+    indices = torch.tensor(indices_list, dtype=torch.long, device="hpu")
     prompt_mapping_tensor = torch.tensor(prompt_mapping,
-                                         device="cuda",
+                                         device="hpu",
                                          dtype=torch.long)
     embeddings_indices = torch.stack([
         indices[2] * extra_vocab_size,
@@ -133,7 +133,7 @@ def convert_mapping(
     sampler_indices_padded[sampler_indices_padded == -1] = max_loras - 1
     sampler_indices_padded = (
         torch.arange(
-            0, len(sampler_indices_padded), device="cuda", dtype=torch.long) +
+            0, len(sampler_indices_padded), device="hpu", dtype=torch.long) +
         (sampler_indices_padded * len(sampler_indices_padded)))
     long_lora_indices = None
     long_lora_indices_len: Optional[int] = None
@@ -212,7 +212,7 @@ class LoRAModel(AdapterModel):
         rank: int,
         lora_alpha: int,
         tensors: Dict[str, torch.Tensor],
-        device: str = "cuda",
+        device: str = "hpu",
         dtype: Optional[torch.dtype] = None,
         embeddings: Optional[Dict[str, torch.Tensor]] = None,
         target_embedding_padding: Optional[int] = None,
@@ -276,7 +276,7 @@ class LoRAModel(AdapterModel):
         *,
         max_position_embeddings: Optional[int] = None,
         lora_model_id: Optional[int] = None,
-        device: str = "cuda",
+        device: str = "hpu",
         dtype: Optional[torch.dtype] = None,
         target_embedding_padding: Optional[int] = None,
         embedding_modules: Optional[Dict[str, str]] = None,
@@ -424,20 +424,20 @@ class LoRAModelManager(AdapterModelManager):
         self.long_lora_context: Optional[LongContextLoRAContext] = None
         self.base_indices = torch.empty(self.max_num_batched_tokens,
                                         dtype=torch.long,
-                                        device="cuda")
+                                        device="hpu")
         self.sampler_indices = torch.empty(self.max_num_batched_tokens,
                                            dtype=torch.long,
-                                           device="cuda")
+                                           device="hpu")
         self.sampler_indices_padded = torch.empty(self.max_num_batched_tokens,
                                                   dtype=torch.long,
-                                                  device="cuda")
+                                                  device="hpu")
         self.embeddings_indices = torch.empty(2,
                                               self.max_num_batched_tokens,
                                               dtype=torch.long,
-                                              device="cuda")
+                                              device="hpu")
         self.long_lora_indices = torch.empty(self.max_num_batched_tokens,
                                              dtype=torch.long,
-                                             device="cuda")
+                                             device="hpu")
         # Scaling factor -> offset to the sin_cos_cache to it.
         # Used for long context lora.
         self.scaling_factor_to_offset: Dict[float, int] = {}
