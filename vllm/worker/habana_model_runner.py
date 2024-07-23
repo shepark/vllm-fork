@@ -42,6 +42,8 @@ _TYPE_CACHE = {}
 _PAD_SLOT_ID = 0
 LORA_WARMUP_RANK = 8
 
+# FIXME: Handle the case when this is above real number of blocks
+DUMMY_BLOCK_IDS = itertools.cycle(range(128))
 
 def subtuple(obj: object, typename: str, to_copy: List[str], to_override: Dict[str, object] = {}):
     if obj is None:
@@ -238,7 +240,8 @@ class HpuModelAdapter():
             torch.ones((batch_size, 1, seq_len, seq_len), device=device, dtype=torch.bool),
             diagonal=1
         )
-        mask = causal_mask.logical_or(len_mask)
+        usage_mask = seq_lens_t.ne(0).view(-1, 1, 1, 1)
+        mask = causal_mask.logical_or(len_mask).logical_and(usage_mask)
         attn_bias = (torch.zeros_like(mask, dtype=dtype)
                         .masked_fill_(mask, -math.inf))
         return metadata._replace(attn_bias=attn_bias)
@@ -658,6 +661,7 @@ class HabanaModelRunner:
         if len(seq_group_metadata_list) == 0:
             return PrepareDecodeMetadata.empty()
 
+        dummy_slots = itertools.cycle(range(self.block_size))
         for seq_group_metadata in seq_group_metadata_list:
             assert not seq_group_metadata.is_prompt
             assert seq_group_metadata.token_chunk_size == 1
@@ -683,12 +687,11 @@ class HabanaModelRunner:
                 seq_lens.append(seq_len)
 
                 block_table = seq_group_metadata.block_tables[seq_id]
-                block_number = block_table[position // self.block_size]
-                block_offset = position % self.block_size
-                slot = block_number * self.block_size + block_offset
-                slot_mapping.append([slot])
-                #lora_index_mapping.append(lora_id)
-                #lora_prompt_mapping.append(lora_id)
+                if len(block_table) > 0:
+                    block_number = block_table[position // self.block_size]
+                    block_offset = position % self.block_size
+                    slot = block_number * self.block_size + block_offset
+                    slot_mapping.append([slot])
 
                 if self.sliding_window is not None:
                     sliding_window_blocks = (self.sliding_window //
@@ -716,6 +719,7 @@ class HabanaModelRunner:
         block_list = pad_list(block_list, block_bucket_size, _PAD_SLOT_ID)
         block_mapping = pad_list(block_mapping, block_bucket_size, 0)
         block_usage = pad_list(block_usage, block_bucket_size, 0)
+        slot_mapping.extend([next(dummy_slots)] for _ in range(input_tokens.size(0) - len(slot_mapping)))
 
         block_list = torch.tensor(block_list, dtype=torch.int, device=self.device)
         block_mapping = torch.tensor(block_mapping, dtype=torch.int, device=self.device)
@@ -958,7 +962,11 @@ class HabanaModelRunner:
             batch_size_padded = find_bucket(real_batch_size, bucket_cfg)
             batch_size_padding = batch_size_padded - real_batch_size
             seq_group_metadata_list = seq_group_metadata_list.copy()
-            seq_group_metadata_list.extend(seq_group_metadata_list[0] for _ in range(batch_size_padding))
+            if os.environ.get('VLLM_MINIMAL_PADDING', 'true') == 'true':
+                padding = (self.create_dummy_seq_group_metadata(-1, 0, is_prompt) for _ in range(batch_size_padding))
+                seq_group_metadata_list.extend(padding)
+            else:
+                seq_group_metadata_list.extend(seq_group_metadata_list[0] for _ in range(batch_size_padding))
         with self.profiler.record_event('internal', 'prepare_input_tensors'):
             (input_tokens, input_positions, attn_metadata, sampling_metadata,
             lora_requests, lora_mapping, multi_modal_input
@@ -1106,14 +1114,13 @@ class HabanaModelRunner:
     def create_dummy_seq_group_metadata(self, group_id, seq_len, is_prompt):
         sampling_params = SamplingParams(temperature=0)
         num_blocks = math.ceil(seq_len / self.block_size)
+        block_tables = {group_id: list(itertools.islice(DUMMY_BLOCK_IDS, num_blocks))}
         if is_prompt:
             input_len = seq_len
             output_len = 0
-            block_tables = None
         else:
             input_len = seq_len - 1
             output_len = 1
-            block_tables = {group_id: [0] * num_blocks}
         prompt_token_ids = [0] * input_len
         output_token_ids = [1] * output_len
         seq_data = SequenceData(prompt_token_ids)
