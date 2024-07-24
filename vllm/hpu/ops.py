@@ -68,8 +68,8 @@ def flat_pa(query,
     kv_heads = key_cache.size(2)
 
     query = batch2block(scale * query, block_mapping).unsqueeze(-2)
-    key = keys_fetch_func(key_cache, block_list).transpose(1, 2)
-    value = values_fetch_func(value_cache, block_list).transpose(1, 2)
+    key = keys_fetch_func(key_cache.transpose(1, 2), block_list)
+    value = values_fetch_func(value_cache.transpose(1, 2), block_list)
     block_bias = block_bias.view(key.size(0), 1, 1, -1)
 
     if kv_heads != q_heads:
