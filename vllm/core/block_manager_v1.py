@@ -170,7 +170,8 @@ class UncachedBlockAllocator(BlockAllocatorBase):
 
         # Initialize the free blocks.
         self.free_blocks: BlockTable = []
-        for i in range(num_blocks):
+        reserved_blocks = 1 # We use block 0 as a scratchpad for padding purposes
+        for i in range(reserved_blocks, num_blocks):
             block = PhysicalTokenBlock(device=device,
                                        block_number=i,
                                        block_size=block_size,
