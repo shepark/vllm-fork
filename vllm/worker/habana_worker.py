@@ -142,8 +142,8 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
         num_cpu_blocks = max(num_cpu_blocks, 0)
 
         # NOTE(kzawora): Restore this once LoRA support is added
-        # if self.model_runner.lora_manager:
-        #     self.model_runner.remove_all_loras()
+        if self.model_runner.lora_manager:
+            self.model_runner.remove_all_loras()
 
         gc.collect()
         return num_hpu_blocks, num_cpu_blocks
@@ -238,29 +238,29 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
             self.cache_engine[virtual_engine].copy(worker_input.blocks_to_copy)
 
     def add_lora(self, lora_request: LoRARequest) -> bool:
-        raise NotImplementedError("LoRA is not implemented for HPU backend.")
+        return self.model_runner.add_lora(lora_request)
 
     def remove_lora(self, lora_id: int) -> bool:
-        raise NotImplementedError("LoRA is not implemented for HPU backend.")
-
-    def list_loras(self) -> Set[int]:
-        raise NotImplementedError("LoRA is not implemented for HPU backend.")
+        return self.model_runner.remove_lora(lora_id)
 
     def pin_lora(self, lora_id: int) -> bool:
-        raise NotImplementedError("LoRA is not implemented for HPU backend.")
+        return self.model_runner.pin_lora(lora_id)
+
+    def list_loras(self) -> Set[int]:
+        return self.model_runner.list_loras()
 
     def add_prompt_adapter(
             self, prompt_adapter_request: PromptAdapterRequest) -> bool:
-        raise NotImplementedError("LoRA is not implemented for HPU backend.")
+        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
 
     def remove_prompt_adapter(self, prompt_adapter_id: int) -> bool:
-        raise NotImplementedError("LoRA is not implemented for HPU backend.")
+        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
 
     def pin_prompt_adapter(self, prompt_adapter_id: int) -> bool:
-        raise NotImplementedError("LoRA is not implemented for HPU backend.")
+        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
 
     def list_prompt_adapters(self) -> Set[int]:
-        raise NotImplementedError("LoRA is not implemented for HPU backend.")
+        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
 
     @property
     def max_model_len(self) -> int:
