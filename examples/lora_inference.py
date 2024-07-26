@@ -5,9 +5,9 @@ sql_lora_path = snapshot_download(repo_id="yard1/llama-2-7b-sql-lora-test")
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 
-llm = LLM(model="meta-llama/Llama-2-7b-hf", enable_lora=True, max_num_seqs=4)
+llm = LLM(model="meta-llama/Llama-2-7b-hf", enable_lora=True, max_num_seqs=4, lora_dtype='bfloat16')
 
-'''sampling_params = SamplingParams(
+sampling_params = SamplingParams(
     temperature=0,
     max_tokens=1024,
     stop=["[/assistant]"]
@@ -27,4 +27,4 @@ outputs = llm.generate(
 for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs[0].text
-    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")'''
+    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
