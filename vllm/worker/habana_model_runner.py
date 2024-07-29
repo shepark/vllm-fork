@@ -1123,7 +1123,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         self.warmup_all_buckets(self.prompt_buckets, True, kv_caches)
         self.warmup_all_buckets(self.decode_buckets, False, kv_caches)
 
-        if not self.enforce_eager:
+        if not self.enforce_eager and htorch.utils.internal.is_lazy():
             mem_margin = 1.0 - float(
                 os.environ.get('VLLM_GRAPH_MEM_MARGIN', '0.02'))
             free_mem = \
