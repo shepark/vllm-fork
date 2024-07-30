@@ -12,7 +12,7 @@ import habana_frameworks.torch as htorch
 
 def with_mark_steps(fn):
 
-    @wraps
+    @wraps(fn)
     def wrapped(*args, **kwargs):
         htorch.core.mark_step()
         result = fn(*args, **kwargs)
