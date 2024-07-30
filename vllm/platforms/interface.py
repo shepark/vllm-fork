@@ -25,7 +25,6 @@ class Platform:
         return self._enum == PlatformEnum.TPU
     
     def is_hpu(self) -> bool:
-        print('PlatformEnum.HPU')
         return self._enum == PlatformEnum.HPU
 
     @staticmethod
