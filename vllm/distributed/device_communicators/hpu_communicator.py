@@ -5,7 +5,8 @@ from torch.distributed import ProcessGroup
 from vllm.platforms import current_platform
 
 if current_platform.is_hpu():
-    import habana_frameworks.torch as htorch
+    import habana_frameworks.torch as htorch  # noqa: F401
+
 
 class HpuCommunicator:
 
@@ -15,14 +16,14 @@ class HpuCommunicator:
             return
         self.disabled = False
         self.group = group
-        self.world_size = torch.distributed.get_world_size(self.group)
+        self.world_size = dist.get_world_size(self.group)
 
     def all_reduce(self, x: torch.Tensor) -> torch.Tensor:
         # FIXME(kzawora): this is a workaround for a bug in Habana PT bridge
         # occurring when PT_HPU_ENABLE_LAZY_COLLECTIVES=true env var is used
         # (which is required for tensor parallel HPUGraph inference)
         htorch.core.mark_step()
-        torch.distributed.all_reduce(x, group=self.group)
+        dist.all_reduce(x, group=self.group)
         return x
 
     def all_gather(self, x: torch.Tensor, dim: int = -1) -> torch.Tensor:
@@ -37,9 +38,7 @@ class HpuCommunicator:
                                     device=x.device)
         # All-gather.
         htorch.core.mark_step()
-        torch.distributed.all_gather_into_tensor(output_tensor,
-                                                 x,
-                                                 group=self.group)
+        dist.all_gather_into_tensor(output_tensor, x, group=self.group)
         # Reshape
         output_tensor = output_tensor.movedim(0, dim)
         output_tensor = output_tensor.reshape(input_size[:dim] +

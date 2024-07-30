@@ -310,7 +310,7 @@ class GroupCoordinator:
         tpu_comm = self.tpu_communicator
         if tpu_comm is not None and not tpu_comm.disabled:
             return tpu_comm.all_reduce(input_)
-        
+
         # For HPUs, use HPU communicator.
         hpu_comm = self.hpu_communicator
         if hpu_comm is not None and not hpu_comm.disabled:
