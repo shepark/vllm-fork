@@ -63,6 +63,35 @@ def _not_fully_sharded_can_replace(can_replace):
     return dec
 
 
+def custom_bgmv(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, wb_t_all: torch.Tensor, indices: torch.LongTensor, layer_idx: int, scale: float,):
+    import habana_frameworks.torch as htorch
+    htorch.core.mark_step()
+    unique_indices = torch.unique(indices)
+    unique_indices = unique_indices[unique_indices!=-1]
+
+    for lora_idx in unique_indices:
+        _indices = torch.where(indices == lora_idx)[0]
+        x_current = torch.index_select(x, 0, _indices)
+        wa_current = wa_t_all[lora_idx, layer_idx].transpose(-1, -2)
+        wb_current = wb_t_all[lora_idx, layer_idx].transpose(-1, -2)
+        tmp = x_current @ wa_current
+        tmp = tmp @ wb_current
+        tmp *= scale
+        y.index_add_(0, _indices, tmp)
+
+def custom_bgmv_embed(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, indices: torch.LongTensor, layer_idx: int, scale: float,):
+    import habana_frameworks.torch as htorch
+    htorch.core.mark_step()
+    unique_indices = torch.unique(indices)
+
+    for lora_idx in unique_indices:
+        _indices = torch.where(indices == lora_idx)[0]
+        x_current = torch.index_select(x, 0, _indices)
+        wa_current = wa_t_all[lora_idx, layer_idx].transpose(-1, -2)
+        tmp = x_current @ wa_current
+        tmp *= scale
+        y.index_add_(0, _indices, tmp)
+
 def _apply_lora(
     x: torch.Tensor,
     lora_a_stacked: torch.Tensor,
@@ -89,7 +118,8 @@ def _apply_lora(
     x = x.view(-1, x.shape[-1])
     output = output.view(-1, output.shape[-1])
     indices = indices.view(-1)
-    add_lora(output, x, lora_a_stacked, lora_b_stacked, indices, 0, 1.0)
+    # add_lora(output, x, lora_a_stacked, lora_b_stacked, indices, 0, 1.0)
+    custom_bgmv(output, x, lora_a_stacked, lora_b_stacked, indices, 0, 1.0)
     return output.view_as(org_output)
 
 
@@ -126,11 +156,16 @@ def _apply_lora_packed_nslice(
     output = output.view(-1, output.shape[-1])
     indices = indices.view(-1)
     offset_left = 0
+    slice_size = output.shape[-1] // len(output_slices)
     for slice_idx in range(len(output_slices)):
-        add_lora_slice(output, x, lora_a_stacked[slice_idx],
-                       lora_b_stacked[slice_idx], indices, 0, 1.0, offset_left,
-                       output_slices[slice_idx])
-        offset_left += output_slices[slice_idx]
+        # add_lora_slice(output, x, lora_a_stacked[slice_idx],
+        #                lora_b_stacked[slice_idx], indices, 0, 1.0, offset_left,
+        #                output_slices[slice_idx])
+        # offset_left += output_slices[slice_idx]
+        start = slice_idx * slice_size
+        end = min((slice_idx + 1)* slice_size, output.shape[-1])
+        custom_bgmv(output[:, start:end], x, lora_a_stacked[slice_idx],
+                       lora_b_stacked[slice_idx], indices, 0, 1.0)
     return output.view_as(org_output)
 
 
@@ -330,8 +365,9 @@ class VocabParallelEmbeddingWithLoRA(BaseLayerWithLoRA):
             full_lora_a_embeddings = full_lora_a_embeddings.view(
                 full_lora_a_embeddings.shape[0] *
                 full_lora_a_embeddings.shape[1], -1)
-        bgmv(full_output, full_lora_a_embeddings, self.lora_b_stacked,
-             self.indices[:self.indices_len[0]], 0, 1.0)
+        custom_bgmv_embed(full_output, full_lora_a_embeddings, self.lora_b_stacked, self.indices[:self.indices_len[0]], 0, 1.0)
+        # bgmv(full_output, full_lora_a_embeddings, self.lora_b_stacked,
+        #      self.indices[:self.indices_len[0]], 0, 1.0)
         return full_output.view_as(full_output_org)
 
     @classmethod
