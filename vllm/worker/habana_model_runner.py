@@ -1029,7 +1029,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         kv_caches = [None] * num_layers
         max_batch_size = self.prompt_bs_bucket_cfg[-1]
         max_seq_len = self.prompt_seq_bucket_cfg[-1]
-
+        
         self.warmup_scenario(max_batch_size, max_seq_len, True, kv_caches)
 
     def warmup_scenario(self, batch_size, seq_len, is_prompt,
@@ -1066,6 +1066,9 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                 ]
         self.profiler.start('internal', scenario_name)
         times = 3 if use_graphs else 1
+        max_seq_len = self.max_num_batched_tokens // self.max_num_seqs
+        if self.lora_config and seq_len > max_seq_len:
+            seq_len = max_seq_len
         seqs = [
             self.create_dummy_seq_group_metadata(i, seq_len, is_prompt,
                                                  lora_request=dummy_lora_requests_per_seq[i]

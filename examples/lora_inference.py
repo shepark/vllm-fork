@@ -4,7 +4,7 @@ from vllm.lora.request import LoRARequest
 
 sql_lora_path = snapshot_download(repo_id="yard1/llama-2-7b-sql-lora-test")
 
-llm = LLM(model="meta-llama/Llama-2-7b-hf", enable_lora=True, max_num_seqs=4, dtype='bfloat16')
+llm = LLM(model="meta-llama/Llama-2-7b-hf", enable_lora=True, max_num_seqs=16, dtype='bfloat16')
 
 sampling_params = SamplingParams(
     temperature=0,
