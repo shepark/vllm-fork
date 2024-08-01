@@ -38,7 +38,7 @@ outputs = llm.generate(
 for i, output in enumerate(outputs):
     prompt = output.prompt
     generated_text = output.outputs[0].text
-    matching = expected_output[i].lower() == generated_text.lower()
+    matching = expected_output[i] == generated_text
     if not matching:
         print(f"{i} matching::{matching} Prompt: {prompt!r}, Generated text: {generated_text!r} expected_output: {expected_output[i]!r}")
     else:
