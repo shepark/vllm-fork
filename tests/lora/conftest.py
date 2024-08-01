@@ -47,6 +47,12 @@ LONG_LORA_INFOS: List[ContextIDInfo] = [{
     "context_length": "32k",
 }]
 
+def is_hpu():
+    try:
+        import habana_frameworks.torch as htorch
+        return True
+    except:
+        return False
 
 def cleanup():
     destroy_model_parallel()
@@ -54,7 +60,8 @@ def cleanup():
     with contextlib.suppress(AssertionError):
         torch.distributed.destroy_process_group()
     gc.collect()
-    torch.cuda.empty_cache()
+    if not is_hpu():
+        torch.cuda.empty_cache()
     ray.shutdown()
 
 
