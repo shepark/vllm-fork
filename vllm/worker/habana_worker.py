@@ -16,13 +16,17 @@ from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          SpeculativeConfig)
 from vllm.distributed import (ensure_model_parallel_initialized,
                               init_distributed_environment)
+from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.model_executor import set_random_seed
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sequence import ExecuteModelRequest
+from vllm.utils import HabanaMemoryProfiler
 from vllm.worker.cache_engine import CacheEngine
 from vllm.worker.habana_model_runner import HabanaModelRunner
 from vllm.worker.worker_base import LocalOrDistributedWorkerBase, WorkerInput
+
+logger = init_logger(__name__)
 
 
 class HabanaWorker(LocalOrDistributedWorkerBase):
@@ -122,9 +126,12 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
 
         # Execute a forward pass with dummy inputs to profile the memory usage
         # of the model.
-        self.model_runner.profile_run()
-        torch.hpu.synchronize()
-
+        with HabanaMemoryProfiler() as m:
+            self.model_runner.profile_run()
+            torch.hpu.synchronize()
+        msg = ("Model profiling run "
+                f"took {m.get_summary_string()}")
+        logger.info(msg)
         # At this point we should've allocated the maximum workspace for all
         # recipes we will use the extra memory for graphs/blocks
         free_hpu_memory = torch.hpu.mem_get_info()[0]
@@ -161,7 +168,12 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
         self.cache_config.num_gpu_blocks = num_gpu_blocks
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
-        self._init_cache_engine()
+        with HabanaMemoryProfiler() as m:
+            self._init_cache_engine()
+            torch.hpu.synchronize()
+        msg = ("Initializing cache engine "
+                f"took {m.get_summary_string()}")
+        logger.info(msg)
         self._warm_up_model()
 
     def _init_cache_engine(self):
