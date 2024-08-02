@@ -1194,7 +1194,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
 
             self.log_graph_warmup_summary(self.prompt_buckets, True,
                                           mem_post_prompt)
-            self.log_graph_warmup_summary(self.prompt_buckets, False,
+            self.log_graph_warmup_summary(self.decode_buckets, False,
                                           mem_post_decode)
 
         end_time = time.perf_counter()
