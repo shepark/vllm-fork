@@ -457,6 +457,9 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
             return False
         return (batch_size, seq_len, is_prompt) in self.graphed_buckets
 
+    def _is_valid_bucket(self, bucket):
+        return bucket[0] * bucket[1] <= self.max_num_batched_tokens
+
     def _setup_buckets(self) -> None:
         self.prompt_bs_bucket_cfg = read_bucket_settings('prompt',
                                                          'bs',
@@ -489,6 +492,9 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         self.prompt_buckets = warmup_buckets(self.prompt_bs_bucket_cfg,
                                              self.prompt_seq_bucket_cfg)
 
+        if self.lora_config:
+            self.prompt_buckets[:] = [bucket for bucket in self.prompt_buckets if self._is_valid_bucket(bucket)]
+
         msg = (f"Generated {len(self.prompt_buckets)} "
                f"prompt buckets: {list(sorted(self.prompt_buckets))}")
         logger.info(msg)
@@ -499,6 +505,8 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         logger.info(msg)
         self.decode_buckets = warmup_buckets(self.decode_bs_bucket_cfg,
                                              self.decode_seq_bucket_cfg)
+        if self.lora_config:
+            self.decode_buckets[:] = [bucket for bucket in self.decode_buckets if self._is_valid_bucket(bucket)]
         msg = (f"Generated {len(self.decode_buckets)} decode buckets: "
                f"{list(sorted(self.decode_buckets))}")
         logger.info(msg)
@@ -1029,11 +1037,13 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         kv_caches = [None] * num_layers
         max_batch_size = self.prompt_bs_bucket_cfg[-1]
         max_seq_len = self.prompt_seq_bucket_cfg[-1]
+        if self.lora_config:
+            max_seq_len = self.max_num_batched_tokens // max_batch_size
         
-        self.warmup_scenario(max_batch_size, max_seq_len, True, kv_caches)
+        self.warmup_scenario(max_batch_size, max_seq_len, True, kv_caches, is_profile_run=True)
 
     def warmup_scenario(self, batch_size, seq_len, is_prompt,
-                        kv_caches) -> None:
+                        kv_caches, is_profile_run = False) -> None:
         use_graphs = self._use_graphs(batch_size, seq_len, is_prompt)
         scenario_name = ("warmup_"
                          f"{'prompt' if is_prompt else 'decode'}_"
@@ -1047,7 +1057,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         # passed in, which contains a lora from the lora warmup path.
         dummy_lora_requests: List[LoRARequest] = []
         dummy_lora_requests_per_seq: List[LoRARequest] = []
-        if self.lora_config:
+        if self.lora_config and is_profile_run:
             assert self.lora_manager is not None
             with self.lora_manager.dummy_lora_cache():
                 for idx in range(self.lora_config.max_loras):
@@ -1066,15 +1076,18 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                 ]
         self.profiler.start('internal', scenario_name)
         times = 3 if use_graphs else 1
-        max_seq_len = self.max_num_batched_tokens // self.max_num_seqs
-        if self.lora_config and seq_len > max_seq_len:
-            seq_len = max_seq_len
+        if self.lora_config and not is_profile_run:
+            lora_mapping = LoRAMapping(
+                [0] * batch_size * seq_len,
+                [0] * batch_size *seq_len,
+            )
+            self.set_active_loras(set(), lora_mapping)
         seqs = [
             self.create_dummy_seq_group_metadata(i, seq_len, is_prompt,
                                                  lora_request=dummy_lora_requests_per_seq[i]
                                                 if dummy_lora_requests_per_seq else None)
-            for i in range(batch_size)
-        ]
+             for i in range(batch_size)
+         ]
         torch.hpu.synchronize()
         for _ in range(times):
             inputs = self.prepare_model_input(seqs)
