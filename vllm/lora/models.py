@@ -24,7 +24,7 @@ from vllm.lora.lora import LoRALayerWeights, PackedLoRALayerWeights
 from vllm.lora.utils import (from_layer, from_layer_logits_processor,
                              parse_fine_tuned_lora_name, replace_submodule)
 from vllm.model_executor.models.interfaces import SupportsLoRA
-from vllm.utils import is_pin_memory_available
+from vllm.utils import is_pin_memory_available, is_hpu
 
 logger = init_logger(__name__)
 
@@ -465,11 +465,17 @@ class LoRAModelManager(AdapterModelManager):
 
     @property
     def capacity(self) -> int:
-        return self.lora_config.max_cpu_loras
+        if is_hpu():
+            return self.lora_config.max_cpu_loras + 1
+        else:
+            return self.lora_config.max_cpu_loras
 
     @property
     def lora_slots(self) -> int:
-        return self.lora_config.max_loras
+        if is_hpu():
+            return self.lora_config.max_loras + 1
+        else:
+            return self.lora_config.max_loras
 
     @property
     def adapter_slots(self) -> int:

@@ -4,7 +4,7 @@ from vllm.lora.request import LoRARequest
 
 sql_lora_path = snapshot_download(repo_id="yard1/llama-2-7b-sql-lora-test")
 
-llm = LLM(model="meta-llama/Llama-2-7b-hf", enable_lora=True, max_num_seqs=2)
+llm = LLM(model="meta-llama/Llama-2-7b-hf", enable_lora=True, max_num_seqs=2, dtype='bfloat16')
 
 sampling_params = SamplingParams(
     temperature=0,
@@ -20,9 +20,11 @@ prompts = [
         "[user] Write a SQL query to answer the question based on the table schema.\n\n context: CREATE TABLE table_name_60 (pick INTEGER, former_wnba_team VARCHAR)\n\n question: What pick was a player that previously played for the Minnesota Lynx? [/user] [assistant]",  # noqa: E501
         "[user] Write a SQL query to answer the question based on the table schema.\n\n context: CREATE TABLE table_28138035_4 (womens_doubles VARCHAR, mens_singles VARCHAR)\n\n question: Name the women's doubles for werner schlager [/user] [assistant]"  # noqa: E501
 ]
+
+# References from GPU with dtype=bfloat16
 expected_output = [
     "  SELECT icao FROM table_name_74 WHERE airport = 'lilongwe international airport' ",  # noqa: E501
-    "  SELECT nationality FROM table_name_11 WHERE elector = 'anchero pantaleone' ",  # noqa: E501
+    "  SELECT nationality FROM table_name_11 WHERE elector = 'Anchero Pantaleone' ",  # noqa: E501
     "  SELECT one_mora FROM table_name_95 WHERE gloss = 'low tone mora with a gloss of /˩okiru/' [òkìɽɯ́] AND accented_mora = 'low tone mora with a gloss of /˩okiru/' [òkìɽɯ́] ",  # noqa: E501
     "  SELECT sex FROM people WHERE people_id IN (SELECT people_id FROM candidate GROUP BY sex ORDER BY COUNT(people_id) DESC LIMIT 1) ",  # noqa: E501
     "  SELECT pick FROM table_name_60 WHERE former_wnba_team = 'Minnesota Lynx' ",  # noqa: E501
@@ -38,7 +40,7 @@ outputs = llm.generate(
 for i, output in enumerate(outputs):
     prompt = output.prompt
     generated_text = output.outputs[0].text
-    matching = expected_output[i].lower() == generated_text.lower()
+    matching = expected_output[i] == generated_text
     if not matching:
         print(f"{i} matching::{matching} Prompt: {prompt!r}, Generated text: {generated_text!r} expected_output: {expected_output[i]!r}")
     else:
