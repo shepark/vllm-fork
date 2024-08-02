@@ -21,7 +21,7 @@ from vllm.lora.request import LoRARequest
 from vllm.model_executor import set_random_seed
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sequence import ExecuteModelRequest
-from vllm.utils import HabanaMemoryProfiler
+from vllm.utils import HabanaMemoryProfiler, format_bytes
 from vllm.worker.cache_engine import CacheEngine
 from vllm.worker.habana_model_runner import HabanaModelRunner
 from vllm.worker.worker_base import LocalOrDistributedWorkerBase, WorkerInput
@@ -130,19 +130,33 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
             self.model_runner.profile_run()
             torch.hpu.synchronize()
         msg = ("Model profiling run "
-                f"took {m.get_summary_string()}")
+               f"took {m.get_summary_string()}")
         logger.info(msg)
         # At this point we should've allocated the maximum workspace for all
         # recipes we will use the extra memory for graphs/blocks
         free_hpu_memory = torch.hpu.mem_get_info()[0]
 
         cache_block_size = self.get_cache_block_size_bytes()
-        graph_headroom = 1 - (float(
+        graph_reserved_mem = (float(
             os.environ.get('VLLM_GRAPH_RESERVED_MEM', '0.4'))
                               if not self.model_config.enforce_eager else 0)
-        num_hpu_blocks = int(free_hpu_memory * graph_headroom *
-                             self.cache_config.gpu_memory_utilization //
-                             cache_block_size)
+        graph_headroom = 1 - graph_reserved_mem
+        available_hpu_memory = free_hpu_memory * \
+            self.cache_config.gpu_memory_utilization
+        hpu_memory_margin = free_hpu_memory * (
+            1 - self.cache_config.gpu_memory_utilization)
+        self.model_runner.mem_margin = hpu_memory_margin
+        cache_size_bytes = available_hpu_memory * graph_headroom
+        graph_headroom_bytes = available_hpu_memory * (1 - graph_headroom)
+        msg = (
+            f"Free device memory: {format_bytes(free_hpu_memory)}, "
+            f"{format_bytes(available_hpu_memory)} usable "
+            f"(gpu_memory_utilization={self.cache_config.gpu_memory_utilization}),"
+            f" {format_bytes(graph_headroom_bytes)} reserved for HPUGraphs "
+            f"(VLLM_GRAPH_RESERVED_MEM={graph_reserved_mem}), "
+            f"{format_bytes(cache_size_bytes)} reserved for KV cache")
+        logger.info(msg)
+        num_hpu_blocks = int(cache_size_bytes // cache_block_size)
         num_cpu_blocks = int(self.cache_config.swap_space_bytes //
                              cache_block_size)
         num_hpu_blocks = max(num_hpu_blocks, 0)
@@ -172,7 +186,7 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
             self._init_cache_engine()
             torch.hpu.synchronize()
         msg = ("Initializing cache engine "
-                f"took {m.get_summary_string()}")
+               f"took {m.get_summary_string()}")
         logger.info(msg)
         self._warm_up_model()
 
