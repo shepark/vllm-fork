@@ -66,7 +66,7 @@ def _not_fully_sharded_can_replace(can_replace):
 
 def custom_bgmv(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, wb_t_all: torch.Tensor, indices: torch.LongTensor, layer_idx: int, scale: float,):
     max_loras = wa_t_all.size(0)
-    indices = (indices + max_loras + 1) % (max_loras + 1)
+    indices = indices % max_loras
     wa = torch.index_select(wa_t_all, 0, indices)[:,layer_idx,:,:].transpose(-1, -2)
     wb = torch.index_select(wb_t_all, 0, indices)[:,layer_idx,:,:].transpose(-1, -2)
 
@@ -78,7 +78,7 @@ def custom_bgmv(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, wb_t_a
 
 def custom_bgmv_embed(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, indices: torch.LongTensor, layer_idx: int, scale: float,):
     max_loras = wa_t_all.size(0)
-    indices = (indices + max_loras + 1) % (max_loras + 1)
+    indices = indices % max_loras
     wa = torch.index_select(wa_t_all, 0, indices)[:,layer_idx,:,:].transpose(-1, -2)
 
     x = x.unsqueeze(1)
