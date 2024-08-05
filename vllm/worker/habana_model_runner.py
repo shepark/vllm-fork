@@ -1039,7 +1039,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         max_seq_len = self.prompt_seq_bucket_cfg[-1]
         if self.lora_config:
             max_seq_len = self.max_num_batched_tokens // max_batch_size
-        
+
         self.warmup_scenario(max_batch_size, max_seq_len, True, kv_caches, is_profile_run=True)
 
     def warmup_scenario(self, batch_size, seq_len, is_prompt,
@@ -1086,8 +1086,8 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
             self.create_dummy_seq_group_metadata(i, seq_len, is_prompt,
                                                  lora_request=dummy_lora_requests_per_seq[i]
                                                 if dummy_lora_requests_per_seq else None)
-             for i in range(batch_size)
-         ]
+            for i in range(batch_size)
+        ]
         torch.hpu.synchronize()
         for _ in range(times):
             inputs = self.prepare_model_input(seqs)
@@ -1379,7 +1379,6 @@ class HabanaModelRunner(
             raise ValueError(
                 "num_steps > 1 is not supported in HabanaModelRunner")
 
-        # NOTE(kzawora): Need to restore this after adding LoRA
         if self.lora_config:
             assert model_input.lora_requests is not None
             assert model_input.lora_mapping is not None
