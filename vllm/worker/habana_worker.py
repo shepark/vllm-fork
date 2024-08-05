@@ -141,7 +141,6 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
         num_hpu_blocks = max(num_hpu_blocks, 0)
         num_cpu_blocks = max(num_cpu_blocks, 0)
 
-        # NOTE(kzawora): Restore this once LoRA support is added
         if self.model_runner.lora_manager:
             self.model_runner.remove_all_loras()
 

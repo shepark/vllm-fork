@@ -65,10 +65,16 @@ def _not_fully_sharded_can_replace(can_replace):
 
 
 def custom_bgmv(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, wb_t_all: torch.Tensor, indices: torch.LongTensor, layer_idx: int, scale: float,):
+    """
+    wa_t_all and wb_t_all contains all LoRA A and LoRA B weight matrices stacked into a single tensor assuming same rank.
+    The corresponding LoRA A and B for each sample is selected based on indices. The avoids a for loop as well as graph breaks.
+    """
+    assert layer_idx == 0, f'layer_idx should be 0, but got {layer_idx}'
     max_loras = wa_t_all.size(0)
+    # Wrap-around for negative indices
     indices = indices % max_loras
-    wa = torch.index_select(wa_t_all, 0, indices)[:,layer_idx,:,:].transpose(-1, -2)
-    wb = torch.index_select(wb_t_all, 0, indices)[:,layer_idx,:,:].transpose(-1, -2)
+    wa = torch.index_select(wa_t_all, 0, indices)[:,0,:,:].transpose(-1, -2)
+    wb = torch.index_select(wb_t_all, 0, indices)[:,0,:,:].transpose(-1, -2)
 
     x = x.unsqueeze(1)
     out = x @ wa
@@ -77,9 +83,15 @@ def custom_bgmv(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, wb_t_a
     y += out * scale
 
 def custom_bgmv_embed(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, indices: torch.LongTensor, layer_idx: int, scale: float,):
+    """
+    wa_t_all and wb_t_all contains all LoRA A and LoRA B weight matrices stacked into a single tensor assuming same rank.
+    The corresponding LoRA A and B for each sample is selected based on indices. The avoids a for loop as well as graph breaks.
+    """
+    assert layer_idx == 0, f'layer_idx should be 0, but got {layer_idx}'
     max_loras = wa_t_all.size(0)
+    # Wrap-around for negative indices
     indices = indices % max_loras
-    wa = torch.index_select(wa_t_all, 0, indices)[:,layer_idx,:,:].transpose(-1, -2)
+    wa = torch.index_select(wa_t_all, 0, indices)[:,0,:,:].transpose(-1, -2)
 
     x = x.unsqueeze(1)
     out = x @ wa
