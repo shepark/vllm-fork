@@ -931,6 +931,11 @@ def cuda_device_count_stateless() -> int:
     # after https://github.com/pytorch/pytorch/pull/122815 is released.
     return _cuda_device_count_stateless(envs.CUDA_VISIBLE_DEVICES)
 
+def get_device() -> str:
+    if is_hpu():
+        return "hpu"
+    return "cuda"
+
 
 def error_on_invalid_device_count_status():
     cache_entries = 0
