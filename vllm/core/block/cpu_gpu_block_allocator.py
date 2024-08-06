@@ -54,7 +54,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         """
         # For HPU block ids cannot be equal to 0
         start_id = 1 if is_hpu() else 0
-        block_ids = list(range(start_id, num_gpu_blocks + num_cpu_blocks))
+        block_ids = list(range(start_id, num_gpu_blocks + num_cpu_blocks + start_id))
         gpu_block_ids = block_ids[:num_gpu_blocks]
         cpu_block_ids = block_ids[num_gpu_blocks:]
 
