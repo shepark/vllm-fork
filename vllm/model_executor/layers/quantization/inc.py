@@ -9,6 +9,7 @@ from vllm.model_executor.layers.linear import LinearBase, LinearMethodBase
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 from vllm.model_executor.utils import set_weight_attrs
+from vllm.model_executor.layers.fused_moe.layer import FusedMoE, UnquantizedFusedMoEMethod
 
 ACTIVATION_SCHEMES = ["static", "dynamic"]
 
@@ -52,6 +53,8 @@ class INCConfig(QuantizationConfig):
                          prefix: str) -> Optional["INCLinearMethod"]:
         if isinstance(layer, LinearBase):
             return INCLinearMethod(self)
+        elif isinstance(layer, FusedMoE):
+           return UnquantizedFusedMoEMethod()
         return None
 
     def get_scaled_act_names(self) -> List[str]:
@@ -65,7 +68,6 @@ class INCConfig(QuantizationConfig):
     @staticmethod
     def get_config_filenames() -> List[str]:
         return []
-
 
 class INCLinearMethod(LinearMethodBase):
     """Linear method for FP8.
