@@ -408,9 +408,8 @@ def get_vllm_version() -> str:
     elif _is_hpu():
         # Get the Intel Gaudi Software Suite version
         gaudi_sw_version = str(get_gaudi_sw_version())
-        if gaudi_sw_version != MAIN_CUDA_VERSION:
-            gaudi_sw_version = gaudi_sw_version.replace(".", "")[:3]
-            version += f"+gaudi{gaudi_sw_version}"
+        gaudi_sw_version = gaudi_sw_version.replace(".", "")[:3]
+        version += f"+gaudi{gaudi_sw_version}"
     elif _is_openvino():
         version += "+openvino"
     elif _is_tpu():
