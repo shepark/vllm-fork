@@ -189,6 +189,10 @@ class HpuModelAdapter():
         hidden_states = self.model(*args, **kwargs)
         hidden_states = hidden_states.view(-1, hidden_states.shape[-1])
         hidden_states = hidden_states.index_select(0, selected_token_indices)
+        from vllm.lora.layers import VocabParallelEmbeddingWithLoRA
+        if isinstance(self.model.model.embed_tokens, VocabParallelEmbeddingWithLoRA):
+            for i in range(0,4):
+                self.model.model.embed_tokens.indices_len[i] = selected_token_indices.numel()
         return hidden_states
 
     def compute_logits(self, *args, **kwargs):
