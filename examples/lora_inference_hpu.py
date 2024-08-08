@@ -39,8 +39,6 @@ outputs = llm.generate(
 for i, output in enumerate(outputs):
     prompt = output.prompt
     generated_text = output.outputs[0].text
-    matching = expected_output[i] == generated_text
-    if not matching:
-        print(f"{i} matching::{matching} Prompt: {prompt!r}, Generated text: {generated_text!r} expected_output: {expected_output[i]!r}")
-    else:
-        print(f"{i} matching::{matching}")
+    match = expected_output[i] == generated_text
+    if not match:
+        print(f"Comparison failed for request_id::{i}\n\t[PROMPT]{prompt!r}\n\t[GENERATED]{generated_text!r}\n\t[EXPECTED]{expected_output[i]!r}")
