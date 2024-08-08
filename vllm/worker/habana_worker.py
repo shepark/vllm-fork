@@ -161,7 +161,7 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
         self._init_cache_engine()
-        # self._warm_up_model()
+        self._warm_up_model()
 
     def _init_cache_engine(self):
         assert self.cache_config.num_gpu_blocks is not None
