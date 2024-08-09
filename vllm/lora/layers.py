@@ -64,17 +64,27 @@ def _not_fully_sharded_can_replace(can_replace):
     return dec
 
 
-def custom_bgmv(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, wb_t_all: torch.Tensor, indices: torch.LongTensor, layer_idx: int, scale: float,):
+def custom_bgmv(
+    y: torch.Tensor,
+    x: torch.Tensor,
+    wa_t_all: torch.Tensor,
+    wb_t_all: torch.Tensor,
+    indices: torch.LongTensor,
+    layer_idx: int,
+    scale: float,
+):
     """
-    wa_t_all and wb_t_all contains all LoRA A and LoRA B weight matrices stacked into a single tensor assuming same rank.
-    The corresponding LoRA A and B for each sample is selected based on indices. The avoids a for loop as well as graph breaks.
+    `wa_t_all` and `wb_t_all` contains all LoRA A and LoRA B weight matrices
+    stacked into a single tensor, assuming same rank. The corresponding LoRA
+    A and B for each sample is selected based on `indices`. This avoids a
+    for-loop as well as graph breaks.
     """
     assert layer_idx == 0, f'layer_idx should be 0, but got {layer_idx}'
     max_loras = wa_t_all.size(0)
     # Wrap-around for negative indices
     indices = indices % max_loras
-    wa = torch.index_select(wa_t_all, 0, indices)[:,0,:,:].transpose(-1, -2)
-    wb = torch.index_select(wb_t_all, 0, indices)[:,0,:,:].transpose(-1, -2)
+    wa = torch.index_select(wa_t_all, 0, indices)[:, 0, :, :].transpose(-1, -2)
+    wb = torch.index_select(wb_t_all, 0, indices)[:, 0, :, :].transpose(-1, -2)
 
     x = x.unsqueeze(1)
     out = x @ wa
@@ -82,21 +92,32 @@ def custom_bgmv(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, wb_t_a
     out = out.squeeze(1)
     y += out * scale
 
-def custom_bgmv_embed(y: torch.Tensor, x: torch.Tensor, wa_t_all: torch.Tensor, indices: torch.LongTensor, layer_idx: int, scale: float,):
+
+def custom_bgmv_embed(
+    y: torch.Tensor,
+    x: torch.Tensor,
+    wa_t_all: torch.Tensor,
+    indices: torch.LongTensor,
+    layer_idx: int,
+    scale: float,
+):
     """
-    wa_t_all and wb_t_all contains all LoRA A and LoRA B weight matrices stacked into a single tensor assuming same rank.
-    The corresponding LoRA A and B for each sample is selected based on indices. The avoids a for loop as well as graph breaks.
+    `wa_t_all` contains all LoRA A weight matrices stacked into a single
+    tensor, assuming same rank. The corresponding LoRA A for each sample is
+    selected based on `indices`. This avoids a for-loop as well as
+    graph breaks.
     """
     assert layer_idx == 0, f'layer_idx should be 0, but got {layer_idx}'
     max_loras = wa_t_all.size(0)
     # Wrap-around for negative indices
     indices = indices % max_loras
-    wa = torch.index_select(wa_t_all, 0, indices)[:,0,:,:].transpose(-1, -2)
+    wa = torch.index_select(wa_t_all, 0, indices)[:, 0, :, :].transpose(-1, -2)
 
     x = x.unsqueeze(1)
     out = x @ wa
     out = out.squeeze(1)
     y += out * scale
+
 
 def _apply_lora(
     x: torch.Tensor,
@@ -166,12 +187,14 @@ def _apply_lora_packed_nslice(
     offset_left = 0
     for slice_idx in range(len(output_slices)):
         if is_hpu():
-            custom_bgmv(output[:, offset_left: offset_left+output_slices[slice_idx]], x, lora_a_stacked[slice_idx],
-                       lora_b_stacked[slice_idx], indices, 0, 1.0)
+            custom_bgmv(
+                output[:, offset_left:offset_left + output_slices[slice_idx]],
+                x, lora_a_stacked[slice_idx], lora_b_stacked[slice_idx],
+                indices, 0, 1.0)
         else:
             add_lora_slice(output, x, lora_a_stacked[slice_idx],
-                           lora_b_stacked[slice_idx], indices, 0, 1.0, offset_left,
-                           output_slices[slice_idx])
+                           lora_b_stacked[slice_idx], indices, 0, 1.0,
+                           offset_left, output_slices[slice_idx])
         offset_left += output_slices[slice_idx]
     return output.view_as(org_output)
 
@@ -373,10 +396,12 @@ class VocabParallelEmbeddingWithLoRA(BaseLayerWithLoRA):
                 full_lora_a_embeddings.shape[0] *
                 full_lora_a_embeddings.shape[1], -1)
         if is_hpu():
-            custom_bgmv_embed(full_output, full_lora_a_embeddings, self.lora_b_stacked, self.indices[:self.indices_len[0]], 0, 1.0)
+            custom_bgmv_embed(full_output, full_lora_a_embeddings,
+                              self.lora_b_stacked,
+                              self.indices[:self.indices_len[0]], 0, 1.0)
         else:
             bgmv(full_output, full_lora_a_embeddings, self.lora_b_stacked,
-               self.indices[:self.indices_len[0]], 0, 1.0)
+                 self.indices[:self.indices_len[0]], 0, 1.0)
         return full_output.view_as(full_output_org)
 
     @classmethod

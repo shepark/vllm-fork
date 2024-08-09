@@ -291,16 +291,20 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
 
     def add_prompt_adapter(
             self, prompt_adapter_request: PromptAdapterRequest) -> bool:
-        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
+        raise NotImplementedError(
+            "Prompt Adapter is not implemented for HPU backend.")
 
     def remove_prompt_adapter(self, prompt_adapter_id: int) -> bool:
-        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
+        raise NotImplementedError(
+            "Prompt Adapter is not implemented for HPU backend.")
 
     def pin_prompt_adapter(self, prompt_adapter_id: int) -> bool:
-        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
+        raise NotImplementedError(
+            "Prompt Adapter is not implemented for HPU backend.")
 
     def list_prompt_adapters(self) -> Set[int]:
-        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
+        raise NotImplementedError(
+            "Prompt Adapter is not implemented for HPU backend.")
 
     def shutdown_inc(self):
         self.model_runner.shutdown_inc()

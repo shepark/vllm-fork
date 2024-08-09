@@ -170,16 +170,20 @@ class HabanaExecutor(ExecutorBase):
 
     def add_prompt_adapter(
             self, prompt_adapter_request: PromptAdapterRequest) -> bool:
-        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
+        raise NotImplementedError(
+            "Prompt Adapter is not implemented for HPU backend.")
 
     def remove_prompt_adapter(self, prompt_adapter_id: int) -> bool:
-        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
+        raise NotImplementedError(
+            "Prompt Adapter is not implemented for HPU backend.")
 
     def pin_prompt_adapter(self, prompt_adapter_id: int) -> bool:
-        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
+        raise NotImplementedError(
+            "Prompt Adapter is not implemented for HPU backend.")
 
     def list_prompt_adapters(self) -> Set[int]:
-        raise NotImplementedError("Prompt Adapter is not implemented for HPU backend.")
+        raise NotImplementedError(
+            "Prompt Adapter is not implemented for HPU backend.")
 
     def check_health(self) -> None:
         # GPUExecutor will always be healthy as long as

@@ -47,12 +47,11 @@ LONG_LORA_INFOS: List[ContextIDInfo] = [{
     "context_length": "32k",
 }]
 
+
 def is_hpu():
-    try:
-        import habana_frameworks.torch as htorch
-        return True
-    except:
-        return False
+    from importlib import util
+    return util.find_spec('habana_frameworks') is not None
+
 
 def cleanup():
     destroy_model_parallel()

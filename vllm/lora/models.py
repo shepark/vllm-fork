@@ -24,7 +24,7 @@ from vllm.lora.lora import LoRALayerWeights, PackedLoRALayerWeights
 from vllm.lora.utils import (from_layer, from_layer_logits_processor,
                              parse_fine_tuned_lora_name, replace_submodule)
 from vllm.model_executor.models.interfaces import SupportsLoRA
-from vllm.utils import is_pin_memory_available, is_hpu, get_device
+from vllm.utils import get_device, is_hpu, is_pin_memory_available
 
 logger = init_logger(__name__)
 
@@ -131,10 +131,10 @@ def convert_mapping(
     sampler_indices = prompt_mapping_tensor
     sampler_indices_padded = sampler_indices.clone()
     sampler_indices_padded[sampler_indices_padded == -1] = max_loras - 1
-    sampler_indices_padded = (
-        torch.arange(
-            0, len(sampler_indices_padded), device=get_device(), dtype=torch.long) +
-        (sampler_indices_padded * len(sampler_indices_padded)))
+    sampler_indices_padded = (torch.arange(
+        0, len(sampler_indices_padded), device=get_device(), dtype=torch.long)
+                              + (sampler_indices_padded *
+                                 len(sampler_indices_padded)))
     long_lora_indices = None
     long_lora_indices_len: Optional[int] = None
     if long_lora_context:

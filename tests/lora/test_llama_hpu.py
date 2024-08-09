@@ -1,15 +1,10 @@
+from multiprocessing import Process
 from typing import List
 
-import os
-import pytest
-import ray
-
-from multiprocessing import Process
+from conftest import cleanup
 
 import vllm
 from vllm.lora.request import LoRARequest
-
-from conftest import cleanup
 
 MODEL_PATH = "meta-llama/Llama-2-7b-hf"
 
@@ -85,7 +80,7 @@ def test_llama_lora_1x(sql_lora_files):
     p = Process(target=_test_llama_lora, args=(sql_lora_files, 1))
     p.start()
     p.join()
-    assert p.exitcode == 0, f"Results don't match with the reference"
+    assert p.exitcode == 0, "Results don't match with the reference"
 
 
 def test_llama_lora_2x(sql_lora_files):
@@ -93,7 +88,7 @@ def test_llama_lora_2x(sql_lora_files):
     p = Process(target=_test_llama_lora, args=(sql_lora_files, 2))
     p.start()
     p.join()
-    assert p.exitcode == 0, f"Results don't match with the reference"
+    assert p.exitcode == 0, "Results don't match with the reference"
 
 
 def test_llama_lora_4x(sql_lora_files):
@@ -101,4 +96,4 @@ def test_llama_lora_4x(sql_lora_files):
     p = Process(target=_test_llama_lora, args=(sql_lora_files, 4))
     p.start()
     p.join()
-    assert p.exitcode == 0, f"Results don't match with the reference"
+    assert p.exitcode == 0, "Results don't match with the reference"

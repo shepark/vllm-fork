@@ -21,6 +21,7 @@ TOLERANCES = {
 }
 MAX_LORAS = 8
 
+
 @pytest.mark.parametrize("m", TENSOR_SIZES)
 @pytest.mark.parametrize("n", TENSOR_SIZES)
 @pytest.mark.parametrize("k", BATCH_SIZES)
@@ -38,13 +39,13 @@ def test_apply_lora(m, n, k, rank, dtype) -> None:
     input = torch.rand(k, n, device="hpu", dtype=dtype)
     expected = input @ lora.lora_a @ lora.lora_b * lora.scaling
 
-    lora_a_stack = torch.zeros(MAX_LORAS+1,
+    lora_a_stack = torch.zeros(MAX_LORAS + 1,
                                1,
                                lora.lora_a.shape[1],
                                lora.lora_a.shape[0],
                                device="hpu",
                                dtype=dtype)
-    lora_b_stack = torch.zeros(MAX_LORAS+1,
+    lora_b_stack = torch.zeros(MAX_LORAS + 1,
                                1,
                                lora.lora_b.shape[1],
                                lora.lora_b.shape[0],
@@ -55,10 +56,9 @@ def test_apply_lora(m, n, k, rank, dtype) -> None:
         lora_b_stack[i][0] = (lora.lora_b * lora.scaling).T
 
     output = torch.zeros(k, m, device="hpu", dtype=dtype)
-    _apply_lora(
-        input, lora_a_stack, lora_b_stack,
-        torch.randint(0, MAX_LORAS, (len(input), ), device="hpu"),
-        output)
+    _apply_lora(input, lora_a_stack, lora_b_stack,
+                torch.randint(0, MAX_LORAS, (len(input), ), device="hpu"),
+                output)
     rtol, atol = TOLERANCES[dtype]
     assert torch.allclose(expected, output, rtol=rtol, atol=atol)
 
@@ -99,7 +99,7 @@ def test_apply_lora_packed_2slice(m, n, k, rank, dtype) -> None:
                          dim=1)
 
     lora_a_stacks = [
-        torch.zeros(MAX_LORAS+1,
+        torch.zeros(MAX_LORAS + 1,
                     1,
                     lora_1.lora_a.shape[1],
                     lora_1.lora_a.shape[0],
@@ -107,7 +107,7 @@ def test_apply_lora_packed_2slice(m, n, k, rank, dtype) -> None:
                     dtype=dtype) for i in range(2)
     ]
     lora_b_stacks = [
-        torch.zeros(MAX_LORAS+1,
+        torch.zeros(MAX_LORAS + 1,
                     1,
                     lora_1.lora_b.shape[1],
                     lora_1.lora_b.shape[0],
@@ -123,9 +123,8 @@ def test_apply_lora_packed_2slice(m, n, k, rank, dtype) -> None:
     output = torch.zeros(k, m, device="hpu", dtype=dtype)
     _apply_lora_packed_nslice(
         input, lora_a_stacks, lora_b_stacks,
-        torch.randint(0,
-                      MAX_LORAS, (len(input), ),
-                      device="hpu"), output, (m // 2, m // 2))
+        torch.randint(0, MAX_LORAS, (len(input), ), device="hpu"), output,
+        (m // 2, m // 2))
 
     rtol, atol = TOLERANCES[dtype]
     assert torch.allclose(expected, output, rtol=rtol, atol=atol)
@@ -167,14 +166,14 @@ def test_apply_lora_packed_3slice(qkv, n, k, rank, dtype) -> None:
                          dim=1)
 
     lora_a_stacks = [
-        torch.zeros(MAX_LORAS+1,
+        torch.zeros(MAX_LORAS + 1,
                     1,
                     lora_q.lora_a.shape[1],
                     lora_q.lora_a.shape[0],
                     device="hpu",
                     dtype=dtype)
     ] + [
-        torch.zeros(MAX_LORAS+1,
+        torch.zeros(MAX_LORAS + 1,
                     1,
                     lora_k.lora_a.shape[1],
                     lora_k.lora_a.shape[0],
@@ -182,14 +181,14 @@ def test_apply_lora_packed_3slice(qkv, n, k, rank, dtype) -> None:
                     dtype=dtype) for i in range(2)
     ]
     lora_b_stacks = [
-        torch.zeros(MAX_LORAS+1,
+        torch.zeros(MAX_LORAS + 1,
                     1,
                     lora_q.lora_b.shape[1],
                     lora_q.lora_b.shape[0],
                     device="hpu",
                     dtype=dtype)
     ] + [
-        torch.zeros(MAX_LORAS+1,
+        torch.zeros(MAX_LORAS + 1,
                     1,
                     lora_k.lora_b.shape[1],
                     lora_k.lora_b.shape[0],
@@ -207,9 +206,8 @@ def test_apply_lora_packed_3slice(qkv, n, k, rank, dtype) -> None:
     output = torch.zeros(k, sum(qkv), device="hpu", dtype=dtype)
     _apply_lora_packed_nslice(
         input, lora_a_stacks, lora_b_stacks,
-        torch.randint(0,
-                      MAX_LORAS, (len(input), ),
-                      device="hpu"), output, (qkv[0], qkv[1], qkv[2]))
+        torch.randint(0, MAX_LORAS, (len(input), ), device="hpu"), output,
+        (qkv[0], qkv[1], qkv[2]))
 
     rtol, atol = TOLERANCES[dtype]
     assert torch.allclose(expected, output, rtol=rtol, atol=atol)
