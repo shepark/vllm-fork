@@ -589,10 +589,19 @@ def caplog_vllm(temporary_enable_log_propagate, caplog):
     # because caplog depends on logs propagated to the root logger.
     yield caplog
 
+def is_hpu():
+    try:
+        import habana_frameworks.torch as htorch
+        return True
+    except:
+        return False
 
 @pytest.fixture(scope="session")
 def num_gpus_available():
     """Get number of GPUs without initializing the CUDA context
     in current process."""
+
+    if is_hpu():
+        return torch.hpu.device_count()
 
     return cuda_device_count_stateless()
