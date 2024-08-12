@@ -466,6 +466,11 @@ class LoRAModelManager(AdapterModelManager):
     @property
     def capacity(self) -> int:
         if is_hpu():
+            # HPU handles no LoRA requests using zero valued A and B tensors.
+            # These zero valued tensors are appended at the end of A and B,
+            # making total number of loras to be lora_config.max_cpu_loras + 1.
+            # This demands the total number of max_cpu_loras to be
+            # lora_config.max_cpu_loras + 1
             return self.lora_config.max_cpu_loras + 1
         else:
             return self.lora_config.max_cpu_loras
@@ -473,6 +478,9 @@ class LoRAModelManager(AdapterModelManager):
     @property
     def lora_slots(self) -> int:
         if is_hpu():
+            # HPU handles no LoRA requests using zero valued A and B tensors.
+            # These zero valued tensors are appended at the end of A and B,
+            # making total number of loras to be lora_config.max_cpu_loras + 1.
             return self.lora_config.max_loras + 1
         else:
             return self.lora_config.max_loras

@@ -12,13 +12,7 @@ def create_test_prompts(
 
     2 requests for base model, 4 requests for the LoRA. We define 2
     different LoRA adapters (using the same model for demo purposes).
-    Since we also set `max_loras=1`, the expectation is that the requests
-    with the second LoRA adapter will be ran after all requests with the
-    first adapter have finished.
     """
-    # TODO Fix issues when enabling parameters [presence_penalty=0.2,
-    # (n=3, best_of=3, use_beam_search=True)] in SamplingParams.
-
     return [
         ("A robot may not injure a human being",
          SamplingParams(temperature=0.0,
@@ -26,7 +20,10 @@ def create_test_prompts(
                         prompt_logprobs=1,
                         max_tokens=128), None),
         ("To be or not to be,",
-         SamplingParams(temperature=0.8, top_k=5, max_tokens=128), None),
+         SamplingParams(temperature=0.8,
+                        top_k=5,
+                        presence_penalty=0.2,
+                        max_tokens=128), None),
         (
             "[user] Write a SQL query to answer the question based on the table schema.\n\n context: CREATE TABLE table_name_74 (icao VARCHAR, airport VARCHAR)\n\n question: Name the ICAO for lilongwe international airport [/user] [assistant]",  # noqa: E501
             SamplingParams(temperature=0.0,
@@ -86,7 +83,7 @@ def process_requests(engine: LLMEngine,
 # References from GPU with dtype=bfloat16
 expected_output = [
     " or, through inaction, allow a human being to come to harm.\nA robot must obey the orders given it by human beings except where such orders would conflict with the First Law.\nA robot must protect its own existence as long as such protection does not conflict with the First or Second Law.\nThe Three Laws of Robotics were created by Isaac Asimov in 1942. They are the foundation of robotics and artificial intelligence.\nThe Three Laws of Robotics are the foundation of robotics and artificial intelligence. They were created by Isaac Asimov in 194",  # noqa: E501
-    " that is the question.\nIt is the most famous line in all of Shakespeare\'s plays and one of the most famous in all of English Literature. The quote is from Hamlet, Prince of Denmark, Act III, Scene I. In this scene, the ghost of Hamlet\'s father appears to his son and asks him to avenge his death. The ghost tells Hamlet of the murder of the king and how he was done in by his brother, Claudius. Hamlet is distraught and confused by the revelation and the ghost asks Hamlet to \"Revenge",  # noqa: E501
+    " that is the question.\nIt is the most famous line in all of Shakespeare's plays and one of the most famous in English literature. The question is not whether or not to be, but rather the question of who to be.\nIn Hamlet's case, the question is whether or not to be a good person. He is torn between the goodness of his father and the evil of his mother.\nThe question is a difficult one, and one that has been asked many times before. In Hamlet's case, the question is whether or not to be a good person, and he is torn between the",  # noqa: E501
     "  SELECT icao FROM table_name_74 WHERE airport = 'lilongwe international airport' ",  # noqa: E501
     "  SELECT nationality FROM table_name_11 WHERE elector = 'Anchero Pantaleone' ",  # noqa: E501
     "  SELECT icao FROM table_name_74 WHERE airport = 'lilongwe international airport' ",  # noqa: E501
@@ -98,7 +95,7 @@ def _test_llama_multilora(sql_lora_files, tp_size):
     """Main function that sets up and runs the prompt processing."""
     engine_args = EngineArgs(model="meta-llama/Llama-2-7b-hf",
                              enable_lora=True,
-                             max_loras=6,
+                             max_loras=2,
                              max_lora_rank=8,
                              max_num_seqs=16,
                              dtype='bfloat16',
