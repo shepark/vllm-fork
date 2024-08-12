@@ -451,6 +451,8 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                 assert hasattr(
                     self.model, "embedding_padding_modules"
                 ), "Model does not have embedding_padding_modules"
+                if self.block_size > self.scheduler_config.max_num_batched_tokens // self.scheduler_config.max_num_seqs:
+                    self.block_size = self.scheduler_config.max_num_batched_tokens // self.scheduler_config.max_num_seqs
                 self.lora_manager = LRUCacheWorkerLoRAManager(
                     self.scheduler_config.max_num_seqs,
                     self.scheduler_config.max_num_batched_tokens,
