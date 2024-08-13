@@ -196,13 +196,6 @@ class HpuModelAdapter():
         hidden_states = self.model(*args, **kwargs)
         hidden_states = hidden_states.view(-1, hidden_states.shape[-1])
         hidden_states = hidden_states.index_select(0, selected_token_indices)
-        from vllm.lora.layers import VocabParallelEmbeddingWithLoRA
-        property = vars(self.model.model)
-        modules = list(property['_modules'].values())
-        for module in modules:
-            if isinstance(module, VocabParallelEmbeddingWithLoRA):
-                for i in range(0, 4):
-                    module.indices_len[i] = selected_token_indices.numel()
         return hidden_states
 
     def compute_logits(self, *args, **kwargs):
@@ -1560,6 +1553,17 @@ class HabanaModelRunner(
                 **execute_model_kwargs,
                 selected_token_indices=sampling_metadata.selected_token_indices
             )
+
+        from vllm.lora.layers import VocabParallelEmbeddingWithLoRA
+        property = vars(self.model.model)
+        model = list(property['_modules'].values())[0]
+        property = vars(model)
+        modules = list(property['_modules'].values())
+        for module in modules:
+            if isinstance(module, VocabParallelEmbeddingWithLoRA):
+                for i in range(0, 4):
+                    module.indices_len[
+                        i] = sampling_metadata.selected_token_indices.numel()
 
         # Compute the logits.
         with self.profiler.record_event(
