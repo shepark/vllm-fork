@@ -112,7 +112,7 @@ def test_llama_multilora_1x(sql_lora_files):
     p = Process(target=_test_llama_multilora, args=(sql_lora_files, 1))
     p.start()
     p.join()
-    assert p.exitcode == 0, "Results don't match with the reference"
+    assert p.exitcode == 0
 
 
 def test_llama_multilora_2x(sql_lora_files):
@@ -120,7 +120,7 @@ def test_llama_multilora_2x(sql_lora_files):
     p = Process(target=_test_llama_multilora, args=(sql_lora_files, 2))
     p.start()
     p.join()
-    assert p.exitcode == 0, "Results don't match with the reference"
+    assert p.exitcode == 0
 
 
 def test_llama_multilora_4x(sql_lora_files):
@@ -128,4 +128,4 @@ def test_llama_multilora_4x(sql_lora_files):
     p = Process(target=_test_llama_multilora, args=(sql_lora_files, 4))
     p.start()
     p.join()
-    assert p.exitcode == 0, "Results don't match with the reference"
+    assert p.exitcode == 0
