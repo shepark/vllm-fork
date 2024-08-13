@@ -12,6 +12,16 @@ import torch
 import torch.nn.functional as F
 
 import vllm.hpu.utils as hpu_utils
+from vllm.logger import init_logger
+
+logger = init_logger()
+HPUFusedRMSNorm = None
+try:
+    from habana_frameworks.torch.hpex.normalization import FusedRMSNorm
+    HPUFusedRMSNorm = FusedRMSNorm
+except ImportError:
+    logger.warning("Could not import HPU FusedRMSNorm kernel. "
+                   "vLLM will use forward_native implementation of RMSNorm.")
 
 PA_SPLIT_VALUE = (os.environ.get('PA_SPLIT_VALUE', '1') == '1')
 
