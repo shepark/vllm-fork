@@ -51,14 +51,6 @@ $ docker run -it --runtime=habana -e HABANA_VISIBLE_DEVICES=all -e OMPI_MCA_btl_
 Build and Install vLLM
 ----------------------
 
-To build and install vLLM from source, run:
-
-``` {.console}
-$ git clone https://github.com/vllm-project/vllm.git
-$ cd vllm
-$ python setup.py develop
-```
-
 Currently, the latest features and performance optimizations are
 developed in Gaudi\'s [vLLM-fork](https://github.com/HabanaAI/vllm-fork)
 and we periodically upstream them to vLLM main repo. To install latest
