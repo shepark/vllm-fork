@@ -444,8 +444,6 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                 assert hasattr(
                     self.model, "embedding_padding_modules"
                 ), "Model does not have embedding_padding_modules"
-                if self.block_size > self.scheduler_config.max_num_batched_tokens // self.scheduler_config.max_num_seqs:  # noqa: E501
-                    self.block_size = self.scheduler_config.max_num_batched_tokens // self.scheduler_config.max_num_seqs  # noqa: E501
                 self.lora_manager = LRUCacheWorkerLoRAManager(
                     self.scheduler_config.max_num_seqs,
                     self.scheduler_config.max_num_batched_tokens,
@@ -495,13 +493,17 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         return bucket[0] * bucket[1] <= self.max_num_batched_tokens
 
     def _setup_buckets(self) -> None:
+        max_bucket_cfg = 64
+        if self.lora_config and \
+            max_bucket_cfg > self.max_num_batched_tokens // self.block_size:
+            max_bucket_cfg = self.max_num_batched_tokens // self.block_size
         self.prompt_bs_bucket_cfg = read_bucket_settings('prompt',
                                                          'bs',
                                                          min=1,
                                                          step=32,
                                                          max=min(
                                                              self.max_num_seqs,
-                                                             64))
+                                                             max_bucket_cfg))
         self.decode_bs_bucket_cfg = read_bucket_settings('decode',
                                                          'bs',
                                                          min=1,
