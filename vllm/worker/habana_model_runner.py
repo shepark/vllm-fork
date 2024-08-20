@@ -1556,16 +1556,18 @@ class HabanaModelRunner(
                 selected_token_indices=sampling_metadata.selected_token_indices
             )
 
-        from vllm.lora.layers import VocabParallelEmbeddingWithLoRA
-        property = vars(self.model.model)
-        model = list(property['_modules'].values())[0]
-        property = vars(model)
-        modules = list(property['_modules'].values())
-        for module in modules:
-            if isinstance(module, VocabParallelEmbeddingWithLoRA):
-                for i in range(0, 4):
-                    module.indices_len[
-                        i] = sampling_metadata.selected_token_indices.numel()
+        if self.lora_config:
+            from vllm.lora.layers import VocabParallelEmbeddingWithLoRA
+            property = vars(self.model.model)
+            model = list(property['_modules'].values())[0]
+            property = vars(model)
+            modules = list(property['_modules'].values())
+            for module in modules:
+                if isinstance(module, VocabParallelEmbeddingWithLoRA):
+                    for i in range(0, 4):
+                        module.indices_len[
+                            i] = sampling_metadata.selected_token_indices.numel(
+                            )
 
         # Compute the logits.
         with self.profiler.record_event(
