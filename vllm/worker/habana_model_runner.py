@@ -990,24 +990,17 @@ class HabanaModelRunner:
             execute_model_kwargs.update({"image_input": multi_modal_input})
         if htorch.utils.internal.is_lazy():
             execute_model_kwargs.update({"bypass_hpu_graphs":not use_graphs})
-        htorch.core.mark_step()
         # Sample the next token based on previous logits if any.
+        update_list = []
         if self.scheduler_config.enable_delayed_sampling and not is_prompt:
-            logits_tensor_list = []
-            empty_samples = 0
             for seq_group_metadata in seq_group_metadata_list:
                 assert len(seq_group_metadata.seq_data) == 1
                 for seq_data in seq_group_metadata.seq_data.values():
-                    if seq_data.prev_logits is not None:
-                        logits_tensor_list.append(seq_data.prev_logits[torch.tensor(seq_data.prev_logits_idx, device=seq_data.prev_logits.device)])
-                    else:
-                        empty_samples += 1
-
-            # FIXME: TODO add a check
-            logits_tensor_list.extend([torch.zeros([32000], dtype=torch.float, device="hpu")] * empty_samples)
-
-            prev_logits = torch.stack(logits_tensor_list, dim=0)
-
+                    update_list.append((seq_data.prev_logits, seq_data.prev_logits_idx))
+            print('UPDATE:')
+            for t, i in update_list:
+                print(t.shape if t is not None else 'None', id(t), i)
+            htorch.core.mark_step()
             with self.profiler.record_event('internal', f'sample_{"prompt" if is_prompt else "decode"}_bs{batch_size}_seq{seq_len}'):
                 output = self.model.sample(
                     logits=prev_logits,
