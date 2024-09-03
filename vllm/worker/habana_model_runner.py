@@ -878,6 +878,11 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         input_positions = torch.tensor(input_positions,
                                        dtype=torch.long,
                                        device=self.device)
+
+        pad_block = _PAD_SLOT_ID // self.block_size
+        dummy_slots = itertools.cycle(range(pad_block, pad_block + self.block_size))
+        slot_mapping = [[s if s != _PAD_SLOT_ID else next(dummy_slots) for s in sl] for sl in slot_mapping]
+
         slot_mapping = torch.tensor(slot_mapping,
                                     dtype=torch.long,
                                     device=self.device)
@@ -1124,7 +1129,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         else:
             input_len = seq_len - 1
             output_len = 1
-            block_tables = {group_id: [0] * num_blocks}
+            block_tables = {group_id: [_PAD_SLOT_ID] * num_blocks}
         prompt_token_ids = [0] * input_len
         output_token_ids = [1] * output_len
         seq_data = SequenceData(prompt_token_ids)
