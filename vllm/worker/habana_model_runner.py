@@ -91,7 +91,8 @@ def warmup_range(config: Tuple[int, int, int]):
     ramp_up_tw = itertools.takewhile(lambda x: x < bstep and x <= bmax, \
         ramp_up_acc)
     stable = range(bstep, bmax + 1, bstep)
-    return list(ramp_up_tw) + list(stable)
+    buckets = list(ramp_up_tw) + list(stable)
+    return list(filter(lambda bucket: bucket >= bmin, buckets))
 
 
 def warmup_buckets(bs_bucket_config, seq_bucket_config,
@@ -110,7 +111,6 @@ def warmup_buckets(bs_bucket_config, seq_bucket_config,
     filtered_buckets = list(
         filter(lambda bucket: bucket[0] * bucket[1] <= max_num_batched_tokens,
                buckets))
-
     if len(filtered_buckets) == 0:
         # legacy case - we can handle this if we ignore max_num_batched_tokens
         min_bucket_bs, min_bucket_seq = min(buckets,
