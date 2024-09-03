@@ -15,6 +15,8 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 from vllm.model_executor.utils import set_weight_attrs
 
+import os
+
 logger = init_logger(__name__)
 
 
@@ -97,6 +99,11 @@ class LinearMethodBase(QuantizeMethodBase):
         Expects create_weights to have been called before on the layer."""
         raise NotImplementedError
 
+    
+def split(tensor, tp, dim):
+    assert tensor.size(dim) % tp == 0
+    return tensor.split(tensor.size(dim) // tp, dim=dim)
+
 
 class UnquantizedLinearMethod(LinearMethodBase):
     """Linear method without quantization."""
@@ -120,6 +127,18 @@ class UnquantizedLinearMethod(LinearMethodBase):
               bias: Optional[torch.Tensor] = None) -> torch.Tensor:
 
         return F.linear(x, layer.weight, bias)
+
+    def apply_with_sharding(self,
+                            layer: torch.nn.Module,
+                            x: torch.Tensor,
+                            tp,
+                            bias: Optional[torch.Tensor] = None) -> torch.Tensor:
+
+        assert bias is None
+        partial_x = split(x, tp, 2)
+        partial_layer = split(layer.weight, tp, 1)
+        partials = [F.linear(px, pl) for px, pl in zip(partial_x, partial_layer)]
+        return sum(partials)
 
 
 class LinearBase(torch.nn.Module):
@@ -790,9 +809,16 @@ class RowParallelLinear(LinearBase):
         # Only fuse bias add into GEMM for rank 0 (this ensures that
         # bias will not get added more than once in TP>1 case)
         bias_ = None if (self.tp_rank > 0 or self.skip_bias_add) else self.bias
-        output_parallel = self.quant_method.apply(self,
-                                                  input_parallel,
-                                                  bias=bias_)
+        target_tp = int(os.environ.get('EXTRA_SHARDS', 1))
+        if self.reduce_results:
+            output_parallel = self.quant_method.apply_with_sharding(self,
+                                                                    input_parallel,
+                                                                    tp=target_tp,
+                                                                    bias=bias_)
+        else:
+            output_parallel = self.quant_method.apply(self,
+                                                      input_parallel,
+                                                      bias=bias_)
         if self.reduce_results and self.tp_size > 1:
             output = tensor_model_parallel_all_reduce(output_parallel)
         else:

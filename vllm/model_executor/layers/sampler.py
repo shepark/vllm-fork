@@ -134,6 +134,9 @@ class Sampler(nn.Module):
         # Compute the log probabilities.
         logprobs = torch.log_softmax(logits, dim=-1, dtype=torch.float)
 
+        indices, values = logprobs.cpu().topk(4)
+        print('logprobs', indices.tolist(), values.tolist(), logprobs.cpu().argmax().item())
+
         # Sample the next tokens.
         sample_results, maybe_sampled_tokens_tensor = _sample(
             probs,
