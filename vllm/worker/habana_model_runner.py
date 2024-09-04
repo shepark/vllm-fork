@@ -47,7 +47,10 @@ if TYPE_CHECKING:
 
 logger = init_logger(__name__)
 
+# This value is assumed to be zero in several places.
+# Use caution when updating it!
 _PAD_SLOT_ID = 0
+
 LORA_WARMUP_RANK = 8
 _TYPE_CACHE = {}
 
@@ -427,7 +430,6 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         self.max_num_batched_tokens = \
             self.scheduler_config.max_num_batched_tokens
         self.block_size = cache_config.block_size
-
         self.pin_memory = is_pin_memory_available()
         self.kv_cache_dtype = kv_cache_dtype
         self.multimodal_config = multimodal_config
@@ -879,8 +881,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                                        dtype=torch.long,
                                        device=self.device)
 
-        pad_block = _PAD_SLOT_ID // self.block_size
-        dummy_slots = itertools.cycle(range(pad_block, pad_block + self.block_size))
+        dummy_slots = itertools.cycle(range(_PAD_SLOT_ID, _PAD_SLOT_ID + self.block_size))
         slot_mapping = [[s if s != _PAD_SLOT_ID else next(dummy_slots) for s in sl] for sl in slot_mapping]
 
         slot_mapping = torch.tensor(slot_mapping,
