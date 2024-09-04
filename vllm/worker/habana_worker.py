@@ -8,8 +8,7 @@ from typing import List, Optional, Set, Tuple
 
 from vllm.utils import HabanaMemoryProfiler, format_bytes, is_fake_hpu
 
-if not is_fake_hpu():
-    import habana_frameworks.torch as htorch  # noqa:F401
+import habana_frameworks.torch as htorch  # noqa:F401
 
 import torch
 import torch.distributed
@@ -194,8 +193,7 @@ class HabanaWorker(LocalOrDistributedWorkerBase):
 
         with HabanaMemoryProfiler() as m:
             self._init_cache_engine()
-            if not is_fake_hpu():
-                torch.hpu.synchronize()
+            torch.hpu.synchronize()
         msg = ("Initializing cache engine "
                f"took {m.get_summary_string()}")
         logger.info(msg)

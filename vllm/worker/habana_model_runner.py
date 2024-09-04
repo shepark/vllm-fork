@@ -17,8 +17,7 @@ from typing import (TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple,
 from vllm.utils import (HabanaMemoryProfiler, format_bytes, is_fake_hpu,
                         is_pin_memory_available, make_tensor_with_pad)
 
-if not is_fake_hpu():
-    import habana_frameworks.torch as htorch
+import habana_frameworks.torch as htorch
 
 import torch
 
@@ -1054,13 +1053,11 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
             self.create_dummy_seq_group_metadata(i, seq_len, is_prompt)
             for i in range(batch_size)
         ]
-        if not is_fake_hpu():
-            torch.hpu.synchronize()
+        torch.hpu.synchronize()
         for _ in range(times):
             inputs = self.prepare_model_input(seqs)
             self.execute_model(inputs, kv_caches)
-            if not is_fake_hpu():
-                torch.hpu.synchronize()
+            torch.hpu.synchronize()
         self.profiler.end()
         gc.collect()
 
@@ -1146,8 +1143,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         self.warmup_all_buckets(self.prompt_buckets, True, kv_caches)
         self.warmup_all_buckets(self.decode_buckets, False, kv_caches)
 
-        if not is_fake_hpu(
-        ) and not self.enforce_eager and htorch.utils.internal.is_lazy():
+        if not self.enforce_eager and htorch.utils.internal.is_lazy():
             assert self.mem_margin is not None, \
                 ("HabanaWorker.determine_num_available_blocks needs "
                 "to be called before warming up the model.")
@@ -1229,8 +1225,6 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
 
 
 def _maybe_wrap_in_hpu_graph(*args, **kwargs):
-    if is_fake_hpu():
-        return HpuModelAdapter(*args, **kwargs)
     return htorch.hpu.wrap_in_hpu_graph(HpuModelAdapter(
         *args, **
         kwargs)) if htorch.utils.internal.is_lazy() else HpuModelAdapter(
@@ -1414,8 +1408,7 @@ class HabanaModelRunner(
         if multi_modal_input is not None:
             execute_model_kwargs.update(multi_modal_input)
 
-        if not is_fake_hpu():
-            htorch.core.mark_step()
+        htorch.core.mark_step()
         if self.is_driver_worker:
             model_event_name = ("model_"
                                 f"{'prompt' if is_prompt else 'decode'}_"
@@ -1440,8 +1433,7 @@ class HabanaModelRunner(
             sampling_metadata.selected_token_indices = None
             logits = self.model.compute_logits(hidden_states,
                                                sampling_metadata)
-        if not is_fake_hpu():
-            htorch.core.mark_step()
+        htorch.core.mark_step()
         # Only perform sampling in the driver worker.
         if not self.is_driver_worker:
             return []
@@ -1457,8 +1449,7 @@ class HabanaModelRunner(
                 sampling_metadata=sampling_metadata,
             )
         output.outputs = output.outputs[:real_batch_size]
-        if not is_fake_hpu():
-            htorch.core.mark_step()
+        htorch.core.mark_step()
 
         if self.is_driver_worker and self.profiler.enabled:
             # Stop recording 'execute_model' event
