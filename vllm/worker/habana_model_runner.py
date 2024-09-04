@@ -323,6 +323,7 @@ class ModelInputForHPU(ModelRunnerInputBase):
     real_batch_size: Optional[int] = None
     batch_size_padded: Optional[int] = None
     virtual_engine: int = 0
+    seq_group_metadata_list: Optional[List[SequenceGroupMetadata]] = None
 
     def as_broadcastable_tensor_dict(self) -> Dict[str, Any]:
         tensor_dict = {
@@ -359,7 +360,6 @@ class ModelInputForHPUWithSamplingMetadata(ModelInputForHPU):
     # Used for speculative decoding. We do not broadcast it because it is only
     # used by the driver worker.
     is_prompt: Optional[bool] = None
-    seq_group_metadata_list: Optional[List[SequenceGroupMetadata]] = None
 
     def as_broadcastable_tensor_dict(self) -> Dict[str, Any]:
         tensor_dict = {
@@ -855,8 +855,9 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                 generation_token = seq_data.get_last_token_id()
                 input_tokens.append([generation_token])
 
-                seq_len = ((seq_data.get_num_computed_tokens() + 1)
-                           if self.scheduler_config.enable_delayed_sampling else seq_data.get_len())
+                seq_len = ((seq_data.get_num_computed_tokens() +
+                            1) if self.scheduler_config.enable_delayed_sampling
+                           else seq_data.get_len())
                 position = seq_len - 1
                 input_positions.append([position])
 
@@ -1635,29 +1636,41 @@ class HabanaModelRunner(
             logits_ids_list = []
             logits_tensor = None
             logits_tensor_list = []
-            for seq_group_metadata in model_input.seq_group_metadata_list:
-                assert len(seq_group_metadata.seq_data) == 1
-                for seq_data in seq_group_metadata.seq_data.values():
-                    if seq_data.prev_logits is not None:
-                        if logits_tensor is None:
-                            logits_tensor = seq_data.prev_logits
-                        if seq_data.prev_logits is logits_tensor:
-                            # accumulate row ids from the same tensor
-                            logits_ids_list.append(seq_data.prev_logits_idx)
+            if model_input.seq_group_metadata_list is not None:
+                for seq_group_metadata in model_input.seq_group_metadata_list:
+                    assert len(seq_group_metadata.seq_data) == 1
+                    for seq_data in seq_group_metadata.seq_data.values():
+                        if seq_data.prev_logits is not None:
+                            if logits_tensor is None:
+                                logits_tensor = seq_data.prev_logits
+                            if seq_data.prev_logits is logits_tensor:
+                                # accumulate row ids from the same tensor
+                                logits_ids_list.append(
+                                    seq_data.prev_logits_idx)
+                            else:
+                                # new logits tensor,
+                                # gather all previously collected rows
+                                logits_tensor_list.append(
+                                    logits_tensor[torch.tensor(
+                                        logits_ids_list,
+                                        device=seq_data.prev_logits.device)])
+                                logits_ids_list = [seq_data.prev_logits_idx]
+                                logits_tensor = seq_data.prev_logits
                         else:
-                            # new logits tensor, gather all previously collected rows
-                            logits_tensor_list.append(logits_tensor[torch.tensor(logits_ids_list, device=seq_data.prev_logits.device)])
-                            logits_ids_list = [seq_data.prev_logits_idx]
-                            logits_tensor = seq_data.prev_logits
-                    else:
-                        # warmup only, TODO add a check
-                        logits_tensor_list.append(torch.zeros([1, 32000], dtype=torch.float, device="hpu"))
+                            # warmup only, TODO add a check
+                            logits_tensor_list.append(
+                                torch.zeros([1, 32000],
+                                            dtype=torch.float,
+                                            device="hpu"))
             if logits_tensor is not None:
-                logits_tensor_list.append(logits_tensor[torch.tensor(logits_ids_list, device=seq_data.prev_logits.device)])
+                logits_tensor_list.append(logits_tensor[torch.tensor(
+                    logits_ids_list, device=seq_data.prev_logits.device)])
 
             prev_logits = torch.cat(logits_tensor_list, dim=0)
 
-            with self.profiler.record_event('internal', f'sample_{"prompt" if is_prompt else "decode"}_bs{batch_size}_seq{seq_len}'):
+            with self.profiler.record_event(
+                    'internal', f'sample_{"prompt" if is_prompt else "decode"}'
+                    '_bs{batch_size}_seq{seq_len}'):
                 output = self.model.sample(
                     logits=prev_logits,
                     sampling_metadata=sampling_metadata,
@@ -1693,26 +1706,32 @@ class HabanaModelRunner(
         if self.scheduler_config.enable_delayed_sampling:
             if not is_prompt:
                 htorch.core.mark_step()
-                # Only after dispatching next model.forward() read and update the previous token ids to return
+                # Only after dispatching next model.forward() read and update
+                # the previous token ids to return
                 sampled_token_ids = output.sampled_token_ids.tolist()
                 for seq_group_output in output.outputs[:real_batch_size]:
                     for sample in seq_group_output.samples:
-                        sample.output_token = sampled_token_ids[sample.output_token][0]
+                        sample.output_token = sampled_token_ids[
+                            sample.output_token][0]
                 output = output
             else:
                 # For prompts compose empty output
-                from vllm.sequence import (Logprob, SamplerOutput, CompletionSequenceGroupOutput, SequenceOutput)
+                from vllm.sequence import (CompletionSequenceGroupOutput,
+                                           Logprob, SamplerOutput,
+                                           SequenceOutput)
                 sampler_output = []
                 for seq_group in sampling_metadata.seq_groups:
                     seq_ids = seq_group.seq_ids
                     next_token_id, parent_id = -1, 0
                     seq_outputs = []
                     seq_outputs.append(
-                        SequenceOutput(seq_ids[parent_id], next_token_id, {-1: Logprob(0.0)}))
+                        SequenceOutput(seq_ids[parent_id], next_token_id,
+                                       {-1: Logprob(0.0)}))
                     sampler_output.append(
                         CompletionSequenceGroupOutput(seq_outputs, None))
 
-                sampled_token_probs, logprobs_tensor, sampled_token_ids = (None, None, None)
+                sampled_token_probs, logprobs_tensor, sampled_token_ids = (
+                    None, None, None)
                 output = SamplerOutput(
                     outputs=sampler_output,
                     sampled_token_probs=sampled_token_probs,
@@ -1733,8 +1752,10 @@ class HabanaModelRunner(
             logits = self.model.compute_logits(hidden_states,
                                                sampling_metadata)
 
-        if self.scheduler_config.enable_delayed_sampling:
-            for idx, seq_group_metadata in enumerate(model_input.seq_group_metadata_list):
+        if (self.scheduler_config.enable_delayed_sampling
+                and model_input.seq_group_metadata_list is not None):
+            for idx, seq_group_metadata in enumerate(
+                    model_input.seq_group_metadata_list):
                 assert len(seq_group_metadata.seq_data) == 1
                 for seq_data in seq_group_metadata.seq_data.values():
                     seq_data.prev_logits = logits
@@ -1749,9 +1770,9 @@ class HabanaModelRunner(
         if not self.scheduler_config.enable_delayed_sampling:
             with self.profiler.record_event(
                     'internal', ('sample_'
-                                f'{"prompt" if is_prompt else "decode"}_'
-                                f'bs{batch_size}_'
-                                f'seq{seq_len}')):
+                                 f'{"prompt" if is_prompt else "decode"}_'
+                                 f'bs{batch_size}_'
+                                 f'seq{seq_len}')):
                 output = self.model.sample(
                     logits=logits,
                     sampling_metadata=sampling_metadata,

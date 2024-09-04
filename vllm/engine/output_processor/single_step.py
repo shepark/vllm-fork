@@ -126,7 +126,7 @@ class SingleStepOutputProcessor(SequenceGroupOutputProcessor):
             # delayed sampling is enabled).
             if last_child_sample.output_token != -1:
                 parent.append_token_id(last_child_sample.output_token,
-                                    last_child_sample.logprobs)
+                                       last_child_sample.logprobs)
                 child_seqs.append((parent, parent))
 
         for seq, _ in child_seqs:

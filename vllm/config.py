@@ -855,12 +855,14 @@ class SchedulerConfig:
         if self.enable_delayed_sampling and self.num_lookahead_slots != 1:
             raise ValueError(
                 "num_lookahead_slots "
-                f"({self.num_lookahead_slots}) must be 1 for delayed sampling.")
+                f"({self.num_lookahead_slots}) must be 1 for delayed sampling."
+            )
 
         if self.enable_delayed_sampling and not self.use_v2_block_manager:
-            raise ValueError(
-                "use_v2_block_manager "
-                f"({self.use_v2_block_manager}) must be True for delayed sampling.")
+            raise ValueError("use_v2_block_manager "
+                             f"({self.use_v2_block_manager}) must be True "
+                             "for delayed sampling.")
+
 
 class DeviceConfig:
 

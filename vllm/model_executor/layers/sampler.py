@@ -350,7 +350,9 @@ def _greedy_sample(
         assert num_parent_seqs == 1, (
             "Greedy sampling should have only one seq.")
         parent_ids = list(range(num_parent_seqs))
-        next_token_ids = [sample_idx if token_positions_only else samples_lst[sample_idx]]
+        next_token_ids = [
+            sample_idx if token_positions_only else samples_lst[sample_idx]
+        ]
         results.append((next_token_ids, parent_ids))
         sample_idx += num_parent_seqs
     return results
@@ -586,7 +588,8 @@ def _sample_with_torch(
         else:
             raise ValueError(f"Unsupported sampling type: {sampling_type}")
 
-    # GPU<->CPU sync happens in the loop below, unless we're storing only token positions (token_positions_only=True)
+    # GPU<->CPU sync happens in the loop below,
+    # unless we're storing only token positions (token_positions_only=True)
     # This also converts the sample output to Python objects.
     if not sampling_metadata.skip_sampler_cpu_output:
         for sampling_type in SamplingType:
@@ -594,7 +597,8 @@ def _sample_with_torch(
                 continue
             (seq_group_id, seq_groups) = sample_metadata[sampling_type]
             if sampling_type == SamplingType.GREEDY:
-                sample_results = _greedy_sample(seq_groups, greedy_samples, token_positions_only)
+                sample_results = _greedy_sample(seq_groups, greedy_samples,
+                                                token_positions_only)
             elif sampling_type in (SamplingType.RANDOM,
                                    SamplingType.RANDOM_SEED):
                 sample_results = _random_sample(
@@ -699,7 +703,8 @@ def _sample_with_triton_kernel(
 def _sample(
     probs: torch.Tensor, logprobs: torch.Tensor,
     sampling_metadata: SamplingMetadata, sampling_tensors: SamplingTensors,
-    include_gpu_probs_tensor: bool, modify_greedy_probs: bool, token_positions_only: bool
+    include_gpu_probs_tensor: bool, modify_greedy_probs: bool,
+    token_positions_only: bool
 ) -> Tuple[SampleResultType, Optional[torch.Tensor]]:
     """
     Args:

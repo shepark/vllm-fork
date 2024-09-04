@@ -165,7 +165,7 @@ class SequenceData:
     def output_token_ids_array(self) -> array:
         return self._output_token_ids
 
-    def append_token_id(self, token_id: int, logprob: float) -> None:
+    def append_token_id(self, token_id: int, logprob: Optional[float]) -> None:
         self._output_token_ids.append(token_id)
         self._cached_all_token_ids.append(token_id)
         self.cumulative_logprob += logprob if logprob is not None else 0.0
@@ -336,9 +336,10 @@ class Sequence:
         token_id: int,
         logprobs: Dict[int, Logprob],
     ) -> None:
-        # assert token_id in logprobs
         self.output_logprobs.append(logprobs)
-        self.data.append_token_id(token_id, logprobs[token_id].logprob if token_id in logprobs else None)
+        self.data.append_token_id(
+            token_id,
+            logprobs[token_id].logprob if token_id in logprobs else None)
 
     def get_len(self) -> int:
         return self.data.get_len()
