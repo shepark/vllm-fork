@@ -47,9 +47,10 @@ if TYPE_CHECKING:
 
 logger = init_logger(__name__)
 
-# This value is assumed to be zero in several places.
-# Use caution when updating it!
+# These values are assumed to be zero in several places.
+# Use caution when updating them!
 _PAD_SLOT_ID = 0
+_PAD_BLOCK_ID = 0
 
 LORA_WARMUP_RANK = 8
 _TYPE_CACHE = {}
@@ -430,6 +431,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         self.max_num_batched_tokens = \
             self.scheduler_config.max_num_batched_tokens
         self.block_size = cache_config.block_size
+
         self.pin_memory = is_pin_memory_available()
         self.kv_cache_dtype = kv_cache_dtype
         self.multimodal_config = multimodal_config
@@ -1133,7 +1135,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         else:
             input_len = seq_len - 1
             output_len = 1
-            block_tables = {group_id: [_PAD_SLOT_ID] * num_blocks}
+            block_tables = {group_id: [_PAD_BLOCK_ID] * num_blocks}
         prompt_token_ids = [0] * input_len
         output_token_ids = [1] * output_len
         seq_data = SequenceData(prompt_token_ids)
