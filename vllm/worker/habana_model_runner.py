@@ -525,7 +525,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                                           mark_only_scales_as_const=True)
                 logger.info("Preparing model with INC took %s",
                             m_inc.get_summary_string())
-            else:
+            elif not is_fake_hpu():
                 self.model = self.model.to("hpu")
                 htcore.mark_step()
             torch.hpu.synchronize()
