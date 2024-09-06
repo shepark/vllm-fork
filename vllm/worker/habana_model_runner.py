@@ -1471,7 +1471,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                     mem_post_prompt, _, prompt_captured_all = (
                         self.warmup_graphs(
                         decode_strategy, self.decode_buckets, False, kv_caches,
-                        decode_available_memory)
+                        decode_available_memory))
 
                     # Not all prompt buckets were captured, but all decode buckets
                     # were captured and we have some free graph-allocated space
