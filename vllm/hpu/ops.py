@@ -8,7 +8,6 @@ import os
 from typing import Optional
 
 import habana_frameworks.torch as htorch
-
 import torch
 import torch.nn.functional as F
 
