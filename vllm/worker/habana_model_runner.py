@@ -1417,10 +1417,11 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                     assert self.mem_margin is not None, \
                         ("HabanaWorker.determine_num_available_blocks needs "
                         "to be called before warming up the model.")
-                    free_mem = HabanaMemoryProfiler.current_free_device_memory()
+                    free_mem = HabanaMemoryProfiler.current_free_device_memory(
+                    )
                     graph_free_mem = free_mem - self.mem_margin
-                    graph_free_mem = align_workers(graph_free_mem,
-                                                   torch.distributed.ReduceOp.MIN)
+                    graph_free_mem = align_workers(
+                        graph_free_mem, torch.distributed.ReduceOp.MIN)
                     prompt_graph_mem_ratio = float(
                         os.environ.get('VLLM_GRAPH_PROMPT_RATIO', '0.5'))
                     prompt_available_memory = (prompt_graph_mem_ratio *
@@ -1435,10 +1436,10 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                         f"{format_bytes(decode_available_memory)} for decode "
                         f"(VLLM_GRAPH_PROMPT_RATIO={prompt_graph_mem_ratio})")
                     logger.info(msg)
-                    prompt_strategy = os.environ.get('VLLM_GRAPH_PROMPT_STRATEGY',
-                                                     'min_tokens')
-                    decode_strategy = os.environ.get('VLLM_GRAPH_DECODE_STRATEGY',
-                                                     'max_bs')
+                    prompt_strategy = os.environ.get(
+                        'VLLM_GRAPH_PROMPT_STRATEGY', 'min_tokens')
+                    decode_strategy = os.environ.get(
+                        'VLLM_GRAPH_DECODE_STRATEGY', 'max_bs')
                     mem_post_prompt, prompt_batch_seq, prompt_captured_all = \
                         self.warmup_graphs(
                         prompt_strategy, self.prompt_buckets, True, kv_caches,
@@ -1452,13 +1453,14 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                     # were captured and we have some free graph-allocated space
                     # left. Let's try to use it for capturing more prompt buckets.
                     if (mem_post_decode + mem_post_prompt < graph_free_mem
-                            and not prompt_captured_all and decode_captured_all):
+                            and not prompt_captured_all
+                            and decode_captured_all):
                         mem_post_prompt, _, prompt_captured_all = (
                             self.warmup_graphs(
                                 prompt_strategy, self.prompt_buckets, True,
-                                kv_caches,
-                                graph_free_mem - mem_post_prompt - mem_post_decode,
-                                mem_post_prompt, prompt_batch_seq))
+                                kv_caches, graph_free_mem - mem_post_prompt -
+                                mem_post_decode, mem_post_prompt,
+                                prompt_batch_seq))
 
                     # Not all decode buckets were captured, but all prompt buckets
                     # were captured and we have some free graph-allocated space
@@ -1467,7 +1469,8 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                         and not decode_captured_all \
                             and prompt_captured_all:
                         mem_post_decode, _, _ = self.warmup_graphs(
-                            decode_strategy, self.decode_buckets, False, kv_caches,
+                            decode_strategy, self.decode_buckets, False,
+                            kv_caches,
                             graph_free_mem - mem_post_prompt - mem_post_decode,
                             mem_post_decode, decode_batch_seq)
 

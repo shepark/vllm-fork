@@ -277,7 +277,9 @@ class DefaultModelLoader(BaseModelLoader):
                    scheduler_config: SchedulerConfig,
                    cache_config: CacheConfig) -> nn.Module:
         with set_default_torch_dtype(model_config.dtype):
-            _device = torch.device(device_config.device) if is_fake_hpu() else torch.device(self.load_config.device)
+            _device = torch.device(
+                device_config.device) if is_fake_hpu() else torch.device(
+                    self.load_config.device)
             with _device:
                 model = _initialize_model(model_config, self.load_config,
                                           lora_config, multimodal_config,
