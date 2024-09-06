@@ -1123,13 +1123,18 @@ def _create_dummy_modules():
     spec = importlib.util.spec_from_loader('habana_frameworks', loader=None)
     habana_frameworks.__spec__ = spec
     sys.modules['habana_frameworks'] = habana_frameworks
-    sys.modules['habana_frameworks.torch'] = habana_frameworks.torch = types.ModuleType('habana_frameworks.torch')
-    sys.modules['habana_frameworks.torch.core'] = habana_frameworks.torch.core = types.ModuleType('habana_frameworks.torch.core')
+    habana_frameworks.torch = types.ModuleType('habana_frameworks.torch')
+    sys.modules['habana_frameworks.torch'] = habana_frameworks.torch
+    habana_frameworks.torch.core = types.ModuleType('habana_frameworks.torch.core')
+    sys.modules['habana_frameworks.torch.core'] = habana_frameworks.torch.core
 
-    sys.modules['habana_frameworks.torch.utils'] = habana_frameworks.torch.utils = types.ModuleType('habana_frameworks.torch.utils')
-    sys.modules['habana_frameworks.torch.utils.internal'] = habana_frameworks.torch.utils.internal = types.ModuleType('habana_frameworks.torch.utils.internal')
+    habana_frameworks.torch.utils = types.ModuleType('habana_frameworks.torch.utils')
+    sys.modules['habana_frameworks.torch.utils'] = habana_frameworks.torch.utils
+    habana_frameworks.torch.utils.internal = types.ModuleType('habana_frameworks.torch.utils.internal')
+    sys.modules['habana_frameworks.torch.utils.internal'] = habana_frameworks.torch.utils.internal
 
-    sys.modules['torch.hpu'] = torch.hpu = types.ModuleType('torch.hpu')
+    torch.hpu = types.ModuleType('torch.hpu')
+    sys.modules['torch.hpu'] = torch.hpu
 
     habana_frameworks.torch.core.mark_step = lambda: print('calling mark_step')
     habana_frameworks.torch.utils.internal.is_lazy = lambda: print('calling is_lazy')
