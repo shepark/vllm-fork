@@ -5,9 +5,11 @@ on:
   # but only for the habana_main branch
   push:
     branches:
+      - private/kzawora/fake_hpu
       - habana_main
   pull_request:
     branches:
+      - private/kzawora/fake_hpu
       - habana_main
 
 
