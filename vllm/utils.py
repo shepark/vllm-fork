@@ -1119,13 +1119,13 @@ def _create_dummy_modules():
     sys.modules['habana_frameworks.torch'] = habana_frameworks.torch = types.ModuleType('habana_frameworks.torch')
     sys.modules['habana_frameworks.torch.core'] = habana_frameworks.torch.core = types.ModuleType('habana_frameworks.torch.core')
 
-    # sys.modules['habana_frameworks.torch.utils'] = habana_frameworks.torch.utils = types.ModuleType('habana_frameworks.torch.utils')
-    # sys.modules['habana_frameworks.torch.utils.internal'] = habana_frameworks.torch.utils.internal = types.ModuleType('habana_frameworks.torch.utils.internal')
+    sys.modules['habana_frameworks.torch.utils'] = habana_frameworks.torch.utils = types.ModuleType('habana_frameworks.torch.utils')
+    sys.modules['habana_frameworks.torch.utils.internal'] = habana_frameworks.torch.utils.internal = types.ModuleType('habana_frameworks.torch.utils.internal')
 
     sys.modules['torch.hpu'] = torch.hpu = types.ModuleType('torch.hpu')
 
     habana_frameworks.torch.core.mark_step = lambda: print('calling mark_step')
-    # habana_frameworks.torch.utils.internal.is_lazy = lambda: print('calling is_lazy')
+    habana_frameworks.torch.utils.internal.is_lazy = lambda: print('calling is_lazy')
     torch.hpu.synchronize = lambda: print('calling synchronize')
 
 def _do_nothing():
@@ -1138,7 +1138,7 @@ def _migrate_to_cpu():
     import habana_frameworks.torch as htorch
 
     htorch.core.mark_step = _do_nothing
-    # htorch.utils.internal.is_lazy = _return_false
+    htorch.utils.internal.is_lazy = _return_false
     torch.hpu.synchronize = _do_nothing
 
 def migrate_to_cpu():
