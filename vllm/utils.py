@@ -1133,6 +1133,11 @@ def _create_dummy_modules():
     habana_frameworks.torch.utils.internal = types.ModuleType('habana_frameworks.torch.utils.internal')
     sys.modules['habana_frameworks.torch.utils.internal'] = habana_frameworks.torch.utils.internal
 
+    habana_frameworks.torch.internal = types.ModuleType('habana_frameworks.torch.internal')
+    sys.modules['habana_frameworks.torch.internal'] = habana_frameworks.torch.internal
+    habana_frameworks.torch.internal.bridge_config = types.ModuleType('habana_frameworks.torch.internal.bridge_config')
+    sys.modules['habana_frameworks.torch.internal.bridge_config'] = habana_frameworks.torch.internal.bridge_config
+
     torch.hpu = types.ModuleType('torch.hpu')
     sys.modules['torch.hpu'] = torch.hpu
 

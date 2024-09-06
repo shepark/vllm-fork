@@ -1499,8 +1499,6 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
 
 
 def _maybe_wrap_in_hpu_graph(*args, **kwargs):
-    if is_fake_hpu():
-        return HpuModelAdapter(*args, **kwargs)
     return htorch.hpu.wrap_in_hpu_graph(HpuModelAdapter(
         *args, **
         kwargs)) if htorch.utils.internal.is_lazy() else HpuModelAdapter(
