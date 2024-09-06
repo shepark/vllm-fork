@@ -6,24 +6,18 @@
 ###############################################################################
 
 from functools import wraps
-
-from vllm.utils import is_fake_hpu
-
-if not is_fake_hpu():
-    import habana_frameworks.torch as htorch
+import habana_frameworks.torch as htorch
 
 
 def with_mark_steps(fn):
 
     @wraps(fn)
     def wrapped(*args, **kwargs):
-        if not is_fake_hpu():
-            htorch.core.mark_step()
+        htorch.core.mark_step()
         result = fn(*args, **kwargs)
         del args
         del kwargs
-        if not is_fake_hpu():
-            htorch.core.mark_step()
+        htorch.core.mark_step()
         return result
 
     return wrapped
