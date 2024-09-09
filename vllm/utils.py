@@ -1123,38 +1123,42 @@ def _create_dummy_modules():
     habana_frameworks = types.ModuleType('habana_frameworks')
     spec = importlib.util.spec_from_loader('habana_frameworks', loader=None)
     habana_frameworks.__spec__ = spec
-    sys.modules['habana_frameworks'] = habana_frameworks
-    habana_frameworks.torch = types.ModuleType('habana_frameworks.torch')
-    sys.modules['habana_frameworks.torch'] = habana_frameworks.torch
-    habana_frameworks.torch.core = types.ModuleType(
+    habana_frameworks.torch = types.ModuleType(  # type: ignore
+        'habana_frameworks.torch')
+    habana_frameworks.torch.core = types.ModuleType(  # type: ignore
         'habana_frameworks.torch.core')
+
+    sys.modules['habana_frameworks'] = habana_frameworks
+    sys.modules['habana_frameworks.torch'] = habana_frameworks.torch
     sys.modules['habana_frameworks.torch.core'] = habana_frameworks.torch.core
 
-    habana_frameworks.torch.utils = types.ModuleType(
+    habana_frameworks.torch.utils = types.ModuleType(  # type: ignore
         'habana_frameworks.torch.utils')
-    sys.modules[
-        'habana_frameworks.torch.utils'] = habana_frameworks.torch.utils
-    habana_frameworks.torch.utils.internal = types.ModuleType(
+    habana_frameworks.torch.utils.internal = types.ModuleType(  # type: ignore
         'habana_frameworks.torch.utils.internal')
     sys.modules[
-        'habana_frameworks.torch.utils.internal'] = habana_frameworks.torch.utils.internal
+        'habana_frameworks.torch.utils'] = habana_frameworks.torch.utils
+    sys.modules['habana_frameworks.torch.utils.internal'] = (
+        habana_frameworks.torch.utils.internal)
 
-    habana_frameworks.torch.internal = types.ModuleType(
+    habana_frameworks.torch.internal = types.ModuleType(  # type: ignore
         'habana_frameworks.torch.internal')
-    sys.modules[
-        'habana_frameworks.torch.internal'] = habana_frameworks.torch.internal
-    habana_frameworks.torch.internal.bridge_config = types.ModuleType(
+    habana_frameworks.torch.internal.bridge_config = types.ModuleType(  # type: ignore
         'habana_frameworks.torch.internal.bridge_config')
     sys.modules[
-        'habana_frameworks.torch.internal.bridge_config'] = habana_frameworks.torch.internal.bridge_config
+        'habana_frameworks.torch.internal'] = habana_frameworks.torch.internal
+    sys.modules['habana_frameworks.torch.internal.bridge_config'] = (
+        habana_frameworks.torch.internal.bridge_config)
 
-    torch.hpu = types.ModuleType('torch.hpu')
+    torch.hpu = types.ModuleType('torch.hpu')  # type: ignore
     sys.modules['torch.hpu'] = torch.hpu
 
-    habana_frameworks.torch.core.mark_step = lambda: print('calling mark_step')
-    habana_frameworks.torch.utils.internal.is_lazy = lambda: print(
+    habana_frameworks.torch.core.mark_step = lambda: print(  # type: ignore
+        'calling mark_step')
+    habana_frameworks.torch.utils.internal.is_lazy = lambda: print(  # type: ignore
         'calling is_lazy')
-    torch.hpu.synchronize = lambda: print('calling synchronize')
+    torch.hpu.synchronize = lambda: print('calling synchronize'  # type: ignore
+                                          )
 
 
 def _do_nothing():
