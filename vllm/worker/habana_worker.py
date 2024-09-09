@@ -6,7 +6,6 @@ import gc
 import os
 from typing import List, Optional, Set, Tuple
 
-from vllm.utils import HabanaMemoryProfiler, format_bytes, is_fake_hpu
 import habana_frameworks.torch as htorch  # noqa:F401
 import torch
 import torch.distributed
@@ -22,6 +21,7 @@ from vllm.lora.request import LoRARequest
 from vllm.model_executor import set_random_seed
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sequence import ExecuteModelRequest
+from vllm.utils import HabanaMemoryProfiler, format_bytes, is_fake_hpu
 from vllm.worker.cache_engine import CacheEngine
 from vllm.worker.habana_model_runner import HabanaModelRunner
 from vllm.worker.worker_base import LocalOrDistributedWorkerBase, WorkerInput

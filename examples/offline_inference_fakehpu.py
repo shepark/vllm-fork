@@ -1,5 +1,6 @@
-from vllm import LLM, SamplingParams
 import argparse
+
+from vllm import LLM, SamplingParams
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--fake_hpu', action='store_true')

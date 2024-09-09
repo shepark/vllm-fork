@@ -16,9 +16,6 @@ from enum import IntEnum
 from typing import (TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple,
                     Optional, Set, Tuple, Type, TypeVar, Union)
 
-from vllm.utils import (HabanaMemoryProfiler, format_bytes, is_fake_hpu,
-                        is_pin_memory_available, make_tensor_with_pad)
-
 import habana_frameworks.torch as htorch
 import habana_frameworks.torch.internal.bridge_config as bc
 import torch
@@ -38,6 +35,8 @@ from vllm.model_executor.model_loader import get_model
 from vllm.sampling_params import SamplingParams
 from vllm.sequence import (IntermediateTensors, SamplerOutput, SequenceData,
                            SequenceGroupMetadata)
+from vllm.utils import (HabanaMemoryProfiler, format_bytes, is_fake_hpu,
+                        is_pin_memory_available, make_tensor_with_pad)
 from vllm.worker.model_runner_base import (
     ModelRunnerBase, ModelRunnerInputBase,
     _add_attn_metadata_broadcastable_dict,
@@ -761,13 +760,12 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         lora_logits_mask: torch.Tensor = None
         counter = 0
         if self.lora_config:
-            lora_mask = torch.zeros(len(seq_group_metadata_list) *
-                                    max_prompt_len,
-                                    (self.lora_config.max_loras + 1) *
-                                    self.lora_config.max_lora_rank,
-                                    dtype=self.lora_config.lora_dtype)
+            lora_mask = torch.zeros(
+                len(seq_group_metadata_list) * max_prompt_len,
+                (self.lora_config.max_loras) * self.lora_config.max_lora_rank,
+                dtype=self.lora_config.lora_dtype)
             lora_logits_mask = torch.zeros(len(seq_group_metadata_list),
-                                           (self.lora_config.max_loras + 1) *
+                                           (self.lora_config.max_loras) *
                                            self.lora_config.max_lora_rank,
                                            dtype=self.lora_config.lora_dtype)
 
@@ -891,7 +889,7 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
 
         if self.lora_config:
             lora_mask = torch.zeros(len(seq_group_metadata_list),
-                                    (self.lora_config.max_loras + 1) *
+                                    (self.lora_config.max_loras) *
                                     self.lora_config.max_lora_rank,
                                     dtype=self.lora_config.lora_dtype)
             ones = torch.ones(1,
@@ -1469,39 +1467,27 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
                 if (mem_post_decode + mem_post_prompt < graph_free_mem
                         and not prompt_captured_all and decode_captured_all):
                     mem_post_prompt, _, prompt_captured_all = (
-                        self.warmup_graphs(decode_strategy,
-                                           self.decode_buckets, False,
-                                           kv_caches, decode_available_memory))
-
-                    # Not all prompt buckets were captured, but all decode buckets
-                    # were captured and we have some free graph-allocated space
-                    # left. Let's try to use it for capturing more prompt buckets.
-                    if (mem_post_decode + mem_post_prompt < graph_free_mem
-                            and not prompt_captured_all
-                            and decode_captured_all):
-                        mem_post_prompt, _, prompt_captured_all = (
-                            self.warmup_graphs(
-                                prompt_strategy, self.prompt_buckets, True,
-                                kv_caches, graph_free_mem - mem_post_prompt -
-                                mem_post_decode, mem_post_prompt,
-                                prompt_batch_seq))
-
-                    # Not all decode buckets were captured, but all prompt buckets
-                    # were captured and we have some free graph-allocated space
-                    # left. Let's try to use it for capturing more decode buckets.
-                    if mem_post_decode + mem_post_prompt < graph_free_mem \
-                        and not decode_captured_all \
-                            and prompt_captured_all:
-                        mem_post_decode, _, _ = self.warmup_graphs(
-                            decode_strategy, self.decode_buckets, False,
+                        self.warmup_graphs(
+                            prompt_strategy, self.prompt_buckets, True,
                             kv_caches,
                             graph_free_mem - mem_post_prompt - mem_post_decode,
-                            mem_post_decode, decode_batch_seq)
+                            mem_post_prompt, prompt_batch_seq))
 
-                    self.log_graph_warmup_summary(self.prompt_buckets, True,
-                                                  mem_post_prompt)
-                    self.log_graph_warmup_summary(self.decode_buckets, False,
-                                                  mem_post_decode)
+                # Not all decode buckets were captured, but all prompt buckets
+                # were captured and we have some free graph-allocated space
+                # left. Let's try to use it for capturing more decode buckets.
+                if mem_post_decode + mem_post_prompt < graph_free_mem \
+                    and not decode_captured_all \
+                        and prompt_captured_all:
+                    mem_post_decode, _, _ = self.warmup_graphs(
+                        decode_strategy, self.decode_buckets, False, kv_caches,
+                        graph_free_mem - mem_post_prompt - mem_post_decode,
+                        mem_post_decode, decode_batch_seq)
+
+                self.log_graph_warmup_summary(self.prompt_buckets, True,
+                                              mem_post_prompt)
+                self.log_graph_warmup_summary(self.decode_buckets, False,
+                                              mem_post_decode)
 
         end_time = time.perf_counter()
         end_mem = HabanaMemoryProfiler.current_device_memory_usage()

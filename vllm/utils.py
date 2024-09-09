@@ -1117,8 +1117,8 @@ async def _run_task_with_lock(task: Callable, lock: asyncio.Lock, *args,
 
 
 def _create_dummy_modules():
-    import types
     import importlib
+    import types
 
     habana_frameworks = types.ModuleType('habana_frameworks')
     spec = importlib.util.spec_from_loader('habana_frameworks', loader=None)
