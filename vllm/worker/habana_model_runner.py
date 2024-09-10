@@ -601,9 +601,6 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
     def _setup_buckets(self) -> None:
         align_bs = lambda x: min(self.max_num_seqs, x)
         max_bucket_cfg = 64
-        if self.lora_config and \
-            max_bucket_cfg > self.max_num_batched_tokens // self.block_size:
-            max_bucket_cfg = self.max_num_batched_tokens // self.block_size
         blocks_step = 128
         #FIXME: The default values should be max_model_len
         max_prompt_seq = 1024
