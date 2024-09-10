@@ -218,6 +218,18 @@ def is_fake_hpu() -> bool:
 
 
 @lru_cache(maxsize=None)
+def hpu_device_string():
+    device_string = 'hpu' if not is_fake_hpu() else 'cpu'
+    return device_string
+
+
+@lru_cache(maxsize=None)
+def hpu_backend_string():
+    backend_string = 'hccl' if not is_fake_hpu() else 'gloo'
+    return backend_string
+
+
+@lru_cache(maxsize=None)
 def _is_habana_frameworks_installed() -> bool:
     from importlib import util
     return util.find_spec('habana_frameworks') is not None
@@ -1152,13 +1164,6 @@ def _create_dummy_modules():
 
     torch.hpu = types.ModuleType('torch.hpu')  # type: ignore
     sys.modules['torch.hpu'] = torch.hpu
-
-    habana_frameworks.torch.core.mark_step = lambda: print(  # type: ignore
-        'calling mark_step')
-    habana_frameworks.torch.utils.internal.is_lazy = lambda: print(  # type: ignore
-        'calling is_lazy')
-    torch.hpu.synchronize = lambda: print('calling synchronize'  # type: ignore
-                                          )
 
 
 def _do_nothing():
