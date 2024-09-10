@@ -553,17 +553,13 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         return bucket[0] * bucket[1] <= self.max_num_batched_tokens
 
     def _setup_buckets(self) -> None:
-        max_bucket_cfg = 64
-        if self.lora_config and \
-            max_bucket_cfg > self.max_num_batched_tokens // self.block_size:
-            max_bucket_cfg = self.max_num_batched_tokens // self.block_size
         self.prompt_bs_bucket_cfg = read_bucket_settings('prompt',
                                                          'bs',
                                                          min=1,
                                                          step=32,
                                                          max=min(
                                                              self.max_num_seqs,
-                                                             max_bucket_cfg))
+                                                             64))
         self.decode_bs_bucket_cfg = read_bucket_settings('decode',
                                                          'bs',
                                                          min=1,
@@ -1223,8 +1219,6 @@ class HabanaModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         kv_caches = [None] * num_layers
         max_batch_size = self.prompt_bs_bucket_cfg[-1]
         max_seq_len = self.prompt_seq_bucket_cfg[-1]
-        if self.lora_config:
-            max_seq_len = self.max_num_batched_tokens // max_batch_size
 
         self.warmup_scenario(max_batch_size,
                              max_seq_len,

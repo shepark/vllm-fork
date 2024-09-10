@@ -97,6 +97,7 @@ def _test_llama_multilora(sql_lora_files, tp_size):
                              max_loras=2,
                              max_lora_rank=8,
                              max_num_seqs=256,
+                             max_num_batched_tokens=262144,
                              dtype='float32',
                              tensor_parallel_size=tp_size)
     engine = LLMEngine.from_engine_args(engine_args)

@@ -40,6 +40,7 @@ def _test_llama_lora(sql_lora_files, tp_size):
     llm = vllm.LLM(MODEL_PATH,
                    enable_lora=True,
                    max_num_seqs=16,
+                   max_num_batched_tokens=16384,
                    max_loras=4,
                    dtype='float32',
                    tensor_parallel_size=tp_size)
